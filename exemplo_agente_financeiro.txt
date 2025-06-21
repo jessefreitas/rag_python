@@ -1,0 +1,97 @@
+# Manual de Análise Financeira
+
+## Introdução
+Este documento contém informações essenciais sobre análise financeira, investimentos e mercado financeiro.
+
+## Análise Fundamentalista
+A análise fundamentalista é uma metodologia de avaliação de ativos que se baseia no estudo dos fundamentos econômicos e financeiros de uma empresa.
+
+### Principais Indicadores
+1. **P/L (Price-to-Earnings)**: Relação entre preço da ação e lucro por ação
+2. **P/BV (Price-to-Book Value)**: Relação entre preço da ação e valor patrimonial
+3. **ROE (Return on Equity)**: Retorno sobre o patrimônio líquido
+4. **ROA (Return on Assets)**: Retorno sobre os ativos
+5. **Margem de Lucro**: Percentual de lucro sobre receita
+
+## Análise Técnica
+A análise técnica estuda o comportamento dos preços e volumes para identificar padrões e tendências.
+
+### Ferramentas Principais
+- **Médias Móveis**: Suavizam variações de preço
+- **RSI (Relative Strength Index)**: Mede força relativa
+- **MACD**: Convergência e divergência de médias móveis
+- **Bandas de Bollinger**: Indicam volatilidade
+
+## Tipos de Investimentos
+
+### Renda Fixa
+- **Tesouro Direto**: Títulos públicos federais
+- **CDB**: Certificado de Depósito Bancário
+- **LCI/LCA**: Letras de Crédito Imobiliário/Agrícola
+- **Debêntures**: Títulos de dívida corporativa
+
+### Renda Variável
+- **Ações**: Participação no capital de empresas
+- **Fundos Imobiliários**: Investimento em imóveis
+- **ETFs**: Fundos negociados em bolsa
+- **Criptomoedas**: Moedas digitais
+
+## Gestão de Risco
+A gestão de risco é fundamental para o sucesso nos investimentos.
+
+### Princípios Básicos
+1. **Diversificação**: Distribuir investimentos
+2. **Alocação de Ativos**: Definir percentuais por classe
+3. **Stop Loss**: Limite de perda
+4. **Análise de Correlação**: Relação entre ativos
+
+## Mercado Financeiro Brasileiro
+
+### Principais Índices
+- **Ibovespa**: Índice da B3 (Bolsa brasileira)
+- **CDI**: Taxa de juros de referência
+- **SELIC**: Taxa básica de juros
+- **IPCA**: Inflação oficial
+
+### Regulamentação
+- **CVM**: Comissão de Valores Mobiliários
+- **BACEN**: Banco Central do Brasil
+- **B3**: Bolsa brasileira de valores
+
+## Estratégias de Investimento
+
+### Conservadora
+- Foco em preservação de capital
+- Maior percentual em renda fixa
+- Baixa tolerância ao risco
+
+### Moderada
+- Equilíbrio entre risco e retorno
+- Mistura de renda fixa e variável
+- Risco médio
+
+### Agressiva
+- Busca por retornos elevados
+- Maior percentual em renda variável
+- Alta tolerância ao risco
+
+## Análise de Cenários
+É importante analisar diferentes cenários para tomar decisões informadas.
+
+### Cenário Otimista
+- Economia em crescimento
+- Juros baixos
+- Mercado em alta
+
+### Cenário Pessimista
+- Recessão econômica
+- Juros elevados
+- Mercado em baixa
+
+### Cenário Neutro
+- Estabilidade econômica
+- Juros moderados
+- Mercado lateral
+
+## Conclusão
+A análise financeira requer conhecimento, disciplina e paciência. É fundamental estudar continuamente e adaptar estratégias conforme as mudanças do mercado. 

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agentes RAG - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .agent-card {
+            transition: transform 0.2s;
+            border-left: 4px solid #007bff;
+        }
+        .agent-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            background-color: #f8f9fa;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+        .message.user {
+            background-color: #007bff;
+            color: white;
+            margin-left: 20%;
+        }
+        .message.agent {
+            background-color: #e9ecef;
+            color: #212529;
+            margin-right: 20%;
+        }
+        .loading {
+            display: none;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-robot me-2"></i>Sistema de Agentes RAG
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/agents">
+                    <i class="fas fa-cogs me-1"></i>Gerenciar Agentes
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="display-5">
+                    <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                </h1>
+                <p class="lead">Gerencie seus agentes de IA e faça consultas inteligentes</p>
+            </div>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-robot fa-2x mb-2"></i>
+                        <h4>{{ agents|length }}</h4>
+                        <p class="mb-0">Agentes Ativos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-file-alt fa-2x mb-2"></i>
+                        <h4>{{ agents|sum(attribute='document_count') }}</h4>
+                        <p class="mb-0">Documentos Total</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database fa-2x mb-2"></i>
+                        <h4>{{ agents|length }}</h4>
+                        <p class="mb-0">Bancos de Vetores</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-clock fa-2x mb-2"></i>
+                        <h4 id="uptime">--</h4>
+                        <p class="mb-0">Tempo Ativo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agentes -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-robot me-2"></i>Seus Agentes
+                        </h5>
+                        <a href="/agents" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus me-1"></i>Novo Agente
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        {% if agents %}
+                            <div class="row">
+                                {% for agent in agents %}
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card agent-card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title">{{ agent.name }}</h6>
+                                            <p class="card-text text-muted small">{{ agent.description[:100] }}...</p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="badge bg-info">
+                                                    <i class="fas fa-file me-1"></i>{{ agent.document_count }} docs
+                                                </span>
+                                                <small class="text-muted">{{ agent.model_name }}</small>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer bg-transparent">
+                                            <div class="btn-group w-100" role="group">
+                                                <a href="/agent/{{ agent.id }}" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-eye me-1"></i>Ver
+                                                </a>
+                                                <button class="btn btn-outline-success btn-sm" onclick="chatWithAgent('{{ agent.id }}', '{{ agent.name }}')">
+                                                    <i class="fas fa-comments me-1"></i>Chat
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-robot fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Nenhum agente criado</h5>
+                                <p class="text-muted">Crie seu primeiro agente para começar</p>
+                                <a href="/agents" class="btn btn-primary">
+                                    <i class="fas fa-plus me-1"></i>Criar Primeiro Agente
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Chat -->
+    <div class="modal fade" id="chatModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-comments me-2"></i>Chat com <span id="agentName"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="chat-container" id="chatContainer">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-robot fa-2x mb-2"></i>
+                            <p>Inicie uma conversa com o agente</p>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="chatInput" placeholder="Digite sua pergunta...">
+                            <button class="btn btn-primary" type="button" onclick="sendMessage()">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentAgentId = null;
+        let chatModal = null;
+
+        // Inicializar modal
+        document.addEventListener('DOMContentLoaded', function() {
+            chatModal = new bootstrap.Modal(document.getElementById('chatModal'));
+            
+            // Configurar input de chat
+            document.getElementById('chatInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+        });
+
+        function chatWithAgent(agentId, agentName) {
+            currentAgentId = agentId;
+            document.getElementById('agentName').textContent = agentName;
+            document.getElementById('chatContainer').innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-robot fa-2x mb-2"></i>
+                    <p>Inicie uma conversa com ${agentName}</p>
+                </div>
+            `;
+            chatModal.show();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentAgentId) return;
+            
+            // Adicionar mensagem do usuário
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Mostrar loading
+            addMessage('Processando...', 'agent', true);
+            
+            // Enviar para API
+            fetch(`/api/agents/${currentAgentId}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ question: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Remover loading
+                removeLoadingMessage();
+                
+                if (data.success) {
+                    addMessage(data.answer, 'agent');
+                } else {
+                    addMessage(`Erro: ${data.error}`, 'agent');
+                }
+            })
+            .catch(error => {
+                removeLoadingMessage();
+                addMessage(`Erro de conexão: ${error}`, 'agent');
+            });
+        }
+
+        function addMessage(text, type, loading = false) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            if (loading) messageDiv.className += ' loading';
+            messageDiv.textContent = text;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function removeLoadingMessage() {
+            const loadingMessages = document.querySelectorAll('.message.loading');
+            loadingMessages.forEach(msg => msg.remove());
+        }
+
+        // Atualizar uptime
+        function updateUptime() {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const diff = now - start;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('uptime').textContent = `${hours}h ${minutes}m`;
+        }
+
+        setInterval(updateUptime, 60000);
+        updateUptime();
+    </script>
+</body>
+</html> 

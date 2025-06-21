@@ -1,0 +1,75 @@
+# Dependências principais
+streamlit>=1.28.0
+openai>=1.0.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.10
+
+# Processamento de documentos
+python-docx>=0.8.11
+PyPDF2>=3.0.1
+pypdf>=3.17.0
+python-pptx>=0.6.21
+openpyxl>=3.1.2
+pandas>=2.0.0
+
+# Vetores e embeddings
+sentence-transformers>=2.2.2
+faiss-cpu>=1.7.4
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Interface e visualização
+plotly>=5.17.0
+altair>=5.1.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Processamento de texto
+nltk>=3.8.1
+spacy>=3.6.0
+textract>=1.6.5
+
+# Utilitários
+python-dotenv>=1.0.0
+requests>=2.31.0
+aiohttp>=3.8.5
+asyncio>=3.4.3
+tqdm>=4.65.0
+colorama>=0.4.6
+
+# Desenvolvimento e testes
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Deploy e produção
+gunicorn>=21.2.0
+uvicorn>=0.23.0
+fastapi>=0.103.0
+
+# Monitoramento e logs
+structlog>=23.1.0
+prometheus-client>=0.17.0
+
+# Segurança
+cryptography>=41.0.0
+passlib>=1.7.4
+
+# Cache e performance
+redis>=4.6.0
+memcached>=1.59
+
+# Processamento de imagens (opcional)
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Análise de dados avançada
+scipy>=1.11.0
+statsmodels>=0.14.0
+
+# Machine Learning (opcional)
+torch>=2.0.0
+transformers>=4.30.0
+datasets>=2.14.0 
