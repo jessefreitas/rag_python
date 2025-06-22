@@ -114,4 +114,21 @@ crewai>=0.1.0
 boto3>=1.29.0  # Para S3 se necessário
 
 # Templates e validação
-pydantic>=2.5.0 
+pydantic>=2.5.0
+
+# === PRIVACIDADE E ANONIMIZAÇÃO - LGPD ===
+# Geração de dados falsos para anonimização
+faker>=19.0.0
+
+# Detecção e remoção de dados pessoais
+scrubadub>=2.0.0
+
+# Análise avançada de dados pessoais (opcional)
+# presidio-analyzer>=2.2.0  # Microsoft Presidio para PII detection
+# presidio-anonymizer>=2.2.0
+
+# Criptografia avançada para dados sensíveis
+cryptography>=41.0.0
+
+# Hashing e utilitários de segurança
+hashlib2>=1.0.0  # Algoritmos de hash adicionais 
