@@ -11,6 +11,11 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 urllib3>=2.0.0
 
+# === CREWAI ORCHESTRATION (v1.5.0) ===
+crewai>=0.1.0
+crewai-tools>=0.1.0
+langchain-tools>=0.1.0
+
 # === DATABASES ===
 chromadb>=0.4.15
 psycopg2-binary>=2.9.7
@@ -40,6 +45,10 @@ pypdf2>=3.0.1
 python-docx>=0.8.11
 openpyxl>=3.1.2
 pandas>=2.1.0
+
+# === DOCUMENT GENERATION (v1.5.0) ===
+jinja2>=3.1.0
+docx2pdf>=0.1.8; sys_platform == "win32"
 
 # === WEB SCRAPING ===
 beautifulsoup4>=4.12.2

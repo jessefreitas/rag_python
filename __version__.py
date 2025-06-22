@@ -5,8 +5,8 @@ Versão do Sistema RAG Python
 # RAG Python - Versioning System
 # Controle de versão semântico
 
-__version__ = "1.4.0"
-__version_info__ = (1, 4, 0)
+__version__ = "1.5.0"
+__version_info__ = (1, 5, 0)
 
 # Histórico de versões
 VERSION_HISTORY = {
@@ -14,7 +14,8 @@ VERSION_HISTORY = {
     "1.1.0": "Extensão Chrome e interfaces múltiplas", 
     "1.2.0": "Sistema de privacidade básico",
     "1.3.0": "LGPD compliance completo + Multi-LLM + Monitoramento + CI/CD",
-    "1.4.0": "API REST completa + Microsoft Presidio + Detecção avançada"
+    "1.4.0": "API REST completa + Microsoft Presidio + Detecção avançada",
+    "1.5.0": "Orquestração CrewAI + Geração de Documentos + Workflows Inteligentes"
 }
 
 # Componentes da versão atual
@@ -32,7 +33,13 @@ CURRENT_FEATURES = [
     "Pipeline CI/CD automatizado",
     "Testes automatizados completos",
     "Dashboard de compliance LGPD",
-    "Detecção avançada de PII com ML"
+    "Detecção avançada de PII com ML",
+    "Orquestração CrewAI para workflows",
+    "Geração de documentos Word/PDF com IA",
+    "4 tipos de pipelines jurídicos especializados",
+    "Execução paralela e assíncrona de workflows",
+    "Templates jurídicos dinâmicos",
+    "Conversor PDF multiplataforma"
 ]
 
 # Status da versão
