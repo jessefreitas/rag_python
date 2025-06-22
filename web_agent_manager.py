@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
+import hashlib
 
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash
 from flask_cors import CORS
@@ -20,7 +21,12 @@ import zipfile
 from agent_system import AgentConfig, BaseAgent, MultiAgentSystem
 from rag_system import RAGSystem
 from vector_store import VectorStore
-from document_loader import load_document, get_text_splitter
+from document_loader import DocumentLoader
+from database import Database  # Importar a nova classe de banco de dados
+
+# Configuração de logging (MOVIDO PARA CIMA)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configuração do Flask
 app = Flask(__name__)
@@ -37,152 +43,170 @@ ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt', 'doc', 'pptx', 'xlsx'}
 Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
 Path('agent_vector_dbs').mkdir(exist_ok=True)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Inicializar o pool de conexões com o banco de dados
+try:
+    Database.initialize_pool()
+except Exception as e:
+    logger.error(f"FALHA AO INICIALIZAR O BANCO DE DADOS: {e}")
+    # A aplicação pode continuar, mas as operações de banco de dados falharão.
+    # Em um ambiente de produção, você pode querer sair aqui.
 
 class AgentManager:
-    """Gerenciador de agentes e seus documentos"""
+    """Gerenciador de agentes e seus documentos usando PostgreSQL"""
     
     def __init__(self):
-        self.agents_config_file = AGENTS_CONFIG_FILE
-        self.agents = {}
-        self.load_agents_config()
-    
-    def load_agents_config(self):
-        """Carrega configuração dos agentes do arquivo JSON"""
+        # O construtor agora está mais simples, sem carregar arquivos.
+        pass
+
+    def _execute_query(self, query, params=None, fetch=None):
+        """Função auxiliar para executar consultas no banco de dados."""
+        conn = None
         try:
-            if os.path.exists(self.agents_config_file):
-                with open(self.agents_config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    self.agents = config.get('agents', {})
-                logger.info(f"Configuração carregada: {len(self.agents)} agentes")
-            else:
-                self.agents = {}
-                self.save_agents_config()
+            conn = Database.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                
+                result = None
+                if fetch == 'one':
+                    record = cursor.fetchone()
+                    if record:
+                        columns = [desc[0] for desc in cursor.description]
+                        result = dict(zip(columns, record))
+                elif fetch == 'all':
+                    records = cursor.fetchall()
+                    columns = [desc[0] for desc in cursor.description]
+                    result = [dict(zip(columns, row)) for row in records]
+                
+                # Commit a transação para salvar as alterações
+                conn.commit()
+                
+                if fetch:
+                    return result
+                return cursor
         except Exception as e:
-            logger.error(f"Erro ao carregar configuração: {e}")
-            self.agents = {}
-    
-    def save_agents_config(self):
-        """Salva configuração dos agentes no arquivo JSON"""
-        try:
-            config = {
-                'agents': self.agents,
-                'last_updated': datetime.now().isoformat()
-            }
-            with open(self.agents_config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-            logger.info("Configuração salva com sucesso")
-        except Exception as e:
-            logger.error(f"Erro ao salvar configuração: {e}")
-    
-    def create_agent(self, agent_data: Dict[str, Any]) -> str:
-        """Cria um novo agente"""
-        try:
-            agent_id = str(uuid.uuid4())
-            
-            # Criar estrutura de pastas
-            agent_folder = Path(UPLOAD_FOLDER) / agent_id
-            agent_folder.mkdir(parents=True, exist_ok=True)
-            
-            # Criar pasta para banco de vetores
-            vector_db_folder = Path('agent_vector_dbs') / agent_id
-            vector_db_folder.mkdir(parents=True, exist_ok=True)
-            
-            # Configuração do agente
-            agent_config = {
-                'id': agent_id,
-                'name': agent_data['name'],
-                'description': agent_data['description'],
-                'system_prompt': agent_data['system_prompt'],
-                'model_name': agent_data.get('model_name', 'gpt-3.5-turbo'),
-                'temperature': agent_data.get('temperature', 0.7),
-                'max_iterations': agent_data.get('max_iterations', 5),
-                'memory': agent_data.get('memory', True),
-                'tools': agent_data.get('tools', ['rag_query', 'search_documents']),
-                'created_at': datetime.now().isoformat(),
-                'updated_at': datetime.now().isoformat(),
-                'document_count': 0,
-                'folder_path': str(agent_folder),
-                'vector_db_path': str(vector_db_folder)
-            }
-            
-            self.agents[agent_id] = agent_config
-            self.save_agents_config()
-            
-            logger.info(f"Agente criado: {agent_data['name']} (ID: {agent_id})")
-            return agent_id
-            
-        except Exception as e:
-            logger.error(f"Erro ao criar agente: {e}")
+            logger.error(f"Erro ao executar query: {e}")
+            if conn:
+                conn.rollback()
             raise
-    
+        finally:
+            if conn:
+                Database.release_connection(conn)
+
+    def create_agent(self, agent_data: Dict[str, Any]) -> str:
+        """Cria um novo agente no banco de dados."""
+        agent_id = str(uuid.uuid4())
+        agent_folder = Path(UPLOAD_FOLDER) / agent_id
+        agent_folder.mkdir(parents=True, exist_ok=True)
+        vector_db_folder = Path('agent_vector_dbs') / agent_id
+        vector_db_folder.mkdir(parents=True, exist_ok=True)
+
+        query = """
+            INSERT INTO agentes (id_agente, nome_agente, descricao, system_prompt, modelo_base, temperatura, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id_agente;
+        """
+        params = (
+            agent_id,
+            agent_data['name'],
+            agent_data['description'],
+            agent_data.get('system_prompt', 'Você é um assistente prestativo.'),
+            agent_data.get('model_name', 'gpt-3.5-turbo'),
+            float(agent_data.get('temperature', 0.7)),
+            'ativo'
+        )
+        new_agent_id = self._execute_query(query, params, fetch='one')['id_agente']
+        logger.info(f"Agente criado no DB: {agent_data['name']} (ID: {new_agent_id})")
+        return new_agent_id
+
     def update_agent(self, agent_id: str, agent_data: Dict[str, Any]) -> bool:
-        """Atualiza um agente existente"""
-        try:
-            if agent_id not in self.agents:
-                return False
-            
-            # Atualizar campos permitidos
-            allowed_fields = ['name', 'description', 'system_prompt', 'model_name', 
-                            'temperature', 'max_iterations', 'memory', 'tools']
-            
-            for field in allowed_fields:
-                if field in agent_data:
-                    self.agents[agent_id][field] = agent_data[field]
-            
-            self.agents[agent_id]['updated_at'] = datetime.now().isoformat()
-            self.save_agents_config()
-            
-            logger.info(f"Agente atualizado: {agent_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erro ao atualizar agente: {e}")
-            return False
-    
+        """Atualiza um agente existente no banco de dados."""
+        query = """
+            UPDATE agentes
+            SET nome_agente = %s, descricao = %s, system_prompt = %s, modelo_base = %s, temperatura = %s
+            WHERE id_agente = %s;
+        """
+        params = (
+            agent_data.get('name'),
+            agent_data.get('description'),
+            agent_data.get('system_prompt'),
+            agent_data.get('model_name'),
+            float(agent_data.get('temperature')),
+            agent_id
+        )
+        self._execute_query(query, params)
+        logger.info(f"Agente atualizado no DB: {agent_id}")
+        return True
+
     def delete_agent(self, agent_id: str) -> bool:
-        """Deleta um agente e seus arquivos"""
-        try:
-            if agent_id not in self.agents:
-                return False
-            
-            # Remover pastas
-            agent_folder = Path(self.agents[agent_id]['folder_path'])
-            vector_db_folder = Path(self.agents[agent_id]['vector_db_path'])
-            
+        """Deleta um agente do banco de dados e remove seus arquivos."""
+        # Primeiro, remover pastas para evitar arquivos órfãos se o delete no DB falhar
+        agent_info = self.get_agent(agent_id)
+        if agent_info:
+             # O caminho das pastas será reconstruído com base no ID
+            agent_folder = Path(UPLOAD_FOLDER) / agent_id
+            vector_db_folder = Path('agent_vector_dbs') / agent_id
             if agent_folder.exists():
                 shutil.rmtree(agent_folder)
-            
             if vector_db_folder.exists():
                 shutil.rmtree(vector_db_folder)
-            
-            # Remover da configuração
-            del self.agents[agent_id]
-            self.save_agents_config()
-            
-            logger.info(f"Agente deletado: {agent_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erro ao deletar agente: {e}")
-            return False
-    
+        
+        query = "DELETE FROM agentes WHERE id_agente = %s;"
+        self._execute_query(query, (agent_id,))
+        logger.info(f"Agente deletado do DB: {agent_id}")
+        return True
+
     def get_agent(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Obtém informações de um agente"""
-        return self.agents.get(agent_id)
-    
+        """Obtém informações de um agente do banco de dados de forma padronizada."""
+        query = "SELECT * FROM agentes WHERE id_agente = %s;"
+        agent = self._execute_query(query, (agent_id,), fetch='one')
+        if agent:
+            # Padroniza as chaves do dicionário para serem consistentes com a UI
+            formatted_agent = {
+                'id': agent['id_agente'],
+                'name': agent['nome_agente'],
+                'description': agent['descricao'],
+                'system_prompt': agent['system_prompt'],
+                'model_name': agent['modelo_base'],
+                'temperature': float(agent['temperatura']),
+                'created_at': agent['criado_em'].isoformat(),
+                # Adiciona caminhos de pasta dinamicamente
+                'folder_path': str(Path(UPLOAD_FOLDER) / str(agent['id_agente'])),
+                'vector_db_path': str(Path('agent_vector_dbs') / str(agent['id_agente']))
+            }
+            return formatted_agent
+        return None
+
     def get_all_agents(self) -> List[Dict[str, Any]]:
-        """Obtém lista de todos os agentes"""
-        return list(self.agents.values())
+        """Obtém lista de todos os agentes do banco de dados."""
+        query = "SELECT * FROM agentes ORDER BY criado_em DESC;"
+        agents = self._execute_query(query, fetch='all')
+        # Renomeia as colunas para corresponder ao que a interface espera
+        formatted_agents = []
+        for agent in agents:
+            formatted_agents.append({
+                'id': agent['id_agente'],
+                'name': agent['nome_agente'],
+                'description': agent['descricao'],
+                'system_prompt': agent['system_prompt'],
+                'model_name': agent['modelo_base'],
+                'temperature': float(agent['temperatura']),
+                'created_at': agent['criado_em'].isoformat()
+                # Adicionar outros campos se necessário pela interface
+            })
+        return formatted_agents
     
+    # Os métodos de manipulação de arquivos (upload, get_files, delete_file)
+    # permanecem em grande parte os mesmos, mas usarão get_agent para
+    # obter o caminho da pasta do agente.
+
     def upload_files_to_agent(self, agent_id: str, files: List) -> Dict[str, Any]:
         """Faz upload de arquivos para um agente específico"""
         try:
-            if agent_id not in self.agents:
+            agent_info = self.get_agent(agent_id)
+            if not agent_info:
                 return {'success': False, 'error': 'Agente não encontrado'}
-            
-            agent_folder = Path(self.agents[agent_id]['folder_path'])
+
+            agent_folder = Path(agent_info['folder_path'])
             uploaded_files = []
             errors = []
             
@@ -197,12 +221,6 @@ class AgentManager:
                     else:
                         errors.append(f"Tipo de arquivo não permitido: {filename}")
             
-            # Atualizar contagem de documentos
-            if uploaded_files:
-                self.agents[agent_id]['document_count'] = len(list(agent_folder.glob('*')))
-                self.agents[agent_id]['updated_at'] = datetime.now().isoformat()
-                self.save_agents_config()
-            
             return {
                 'success': True,
                 'uploaded_files': uploaded_files,
@@ -214,13 +232,14 @@ class AgentManager:
             logger.error(f"Erro no upload: {e}")
             return {'success': False, 'error': str(e)}
     
-    def get_agent_files(self, agent_id: str) -> List[str]:
+    def get_agent_files(self, agent_id: str) -> List[Dict[str, Any]]:
         """Obtém lista de arquivos de um agente"""
         try:
-            if agent_id not in self.agents:
+            agent_info = self.get_agent(agent_id)
+            if not agent_info:
                 return []
-            
-            agent_folder = Path(self.agents[agent_id]['folder_path'])
+
+            agent_folder = Path(agent_info['folder_path'])
             if not agent_folder.exists():
                 return []
             
@@ -242,17 +261,15 @@ class AgentManager:
     def delete_agent_file(self, agent_id: str, filename: str) -> bool:
         """Deleta um arquivo específico de um agente"""
         try:
-            if agent_id not in self.agents:
+            agent_info = self.get_agent(agent_id)
+            if not agent_info:
                 return False
-            
-            agent_folder = Path(self.agents[agent_id]['folder_path'])
+
+            agent_folder = Path(agent_info['folder_path'])
             file_path = agent_folder / filename
             
-            if file_path.exists() and file_path.is_file():
+            if file_path.exists():
                 file_path.unlink()
-                self.agents[agent_id]['document_count'] = len(list(agent_folder.glob('*')))
-                self.agents[agent_id]['updated_at'] = datetime.now().isoformat()
-                self.save_agents_config()
                 return True
             return False
             
@@ -261,59 +278,58 @@ class AgentManager:
             return False
 
     def allowed_file(self, filename: str) -> bool:
+        """Verifica se a extensão do arquivo é permitida."""
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
     def query_agent(self, agent_id: str, question: str) -> Dict[str, Any]:
-        """Consulta um agente com uma pergunta"""
+        """Executa uma consulta em um agente específico."""
         try:
-            if agent_id not in self.agents:
-                return {'success': False, 'error': 'Agente não encontrado'}
-            
-            agent_config = self.agents[agent_id]
-            vector_db_path = agent_config['vector_db_path']
-            
-            # Inicializar o RAG System específico para o agente
-            rag_system = RAGSystem(vector_db_path=vector_db_path)
-            
-            # Configurar o prompt do agente
-            system_prompt = agent_config.get('system_prompt', "Você é um assistente prestativo.")
-            
-            # Criar e executar o agente
-            agent_executor = BaseAgent(
-                rag_system=rag_system,
-                model_name=agent_config.get('model_name', 'gpt-3.5-turbo'),
-                temperature=agent_config.get('temperature', 0.7),
-                system_prompt=system_prompt,
-                tools=['rag_query', 'search_documents'],
-                memory=agent_config.get('memory', True)
+            # 1. Obter detalhes do agente do DB
+            agent_details = self.get_agent(agent_id)
+            if not agent_details:
+                raise ValueError("Agente não encontrado")
+
+            # 2. Configurar o sistema RAG para este agente
+            agent_config = AgentConfig(
+                agent_id=agent_details['id'],
+                agent_name=agent_details['name'],
+                system_prompt=agent_details['system_prompt'],
+                model_name=agent_details['model_name'],
+                temperature=float(agent_details['temperature'])
             )
+
+            # Correção: Instanciar RAGSystem apenas com o caminho do DB de vetores
+            rag_system = RAGSystem(vector_db_path=agent_details['vector_db_path'])
+
+            # 3. Inicializar e executar o agente
+            agent = BaseAgent(config=agent_config, rag_system=rag_system)
             
-            response = agent_executor.run(question)
+            # Usar o método .run() da nossa classe BaseAgent, que já lida com a lógica do invoke
+            response = agent.run(question)
             
-            return {'success': True, 'response': response}
-            
+            return {"response": response}
+
         except Exception as e:
-            logger.error(f"Erro ao consultar agente: {e}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"Erro ao consultar agente {agent_id}: {e}")
+            # Re-lança a exceção para que a rota da API possa tratá-la
+            raise
 
 # Instância do gerenciador
 agent_manager = AgentManager()
 
 
-# --- Rotas da Interface Web ---
+# --- Rotas da Aplicação Web (Páginas) ---
 
 @app.route('/')
 def index():
-    """Página principal que exibe o dashboard com a lista de agentes"""
-    agents = agent_manager.get_all_agents()
-    return render_template('index.html', agents=agents)
+    """Página principal que redireciona para a listagem de agentes."""
+    return redirect(url_for('agents_page'))
 
 @app.route('/agents')
 def agents_page():
-    """Página que exibe todos os agentes"""
-    agents = agent_manager.get_all_agents()
-    return render_template('agents.html', agents=agents)
+    """Página principal que exibe e gerencia os agentes."""
+    return render_template('agents.html')
 
 @app.route('/agent/<agent_id>')
 def agent_detail(agent_id):
@@ -321,50 +337,64 @@ def agent_detail(agent_id):
     agent = agent_manager.get_agent(agent_id)
     if not agent:
         return "Agente não encontrado", 404
-    return render_template('agent_detail.html', agent=agent)
+    
+    # Busca os arquivos do agente (a lógica pode ser movida para AgentManager)
+    agent_folder = Path(UPLOAD_FOLDER) / agent_id
+    files_list = []
+    if agent_folder.exists():
+        for file_path in agent_folder.iterdir():
+            if file_path.is_file():
+                files_list.append({
+                    "name": file_path.name,
+                    "size": file_path.stat().st_size,
+                    "modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                })
+    
+    return render_template('agent_detail.html', agent=agent, files=files_list)
 
 
-# --- Rotas da API ---
+# --- Rotas da API (para interações via JavaScript) ---
 
-@app.route('/api/agents', methods=['GET'])
-def api_get_agents():
-    """Retorna lista de todos os agentes"""
-    agents = agent_manager.get_all_agents()
-    return jsonify(agents)
+@app.route('/api/agents', methods=['GET', 'POST'])
+def handle_agents():
+    """Lida com a criação e listagem de agentes."""
+    if request.method == 'POST':
+        # Lógica de criação (antiga api_create_agent)
+        data = request.get_json()
+        if not data or not data.get('name') or not data.get('description'):
+            return jsonify({'error': 'Nome e descrição são obrigatórios'}), 400
+        try:
+            agent_id = agent_manager.create_agent(data)
+            agent = agent_manager.get_agent(agent_id)
+            return jsonify(agent), 201
+        except Exception as e:
+            logger.error(f"Erro ao criar agente: {e}")
+            return jsonify({'error': f'Erro interno ao criar agente: {e}'}), 500
+            
+    elif request.method == 'GET':
+        # Lógica de listagem (antiga api_get_agents)
+        try:
+            agents = agent_manager.get_all_agents()
+            return jsonify(agents)
+        except Exception as e:
+            logger.error(f"Erro ao listar agentes: {e}")
+            return jsonify({'error': f'Erro interno ao listar agentes: {e}'}), 500
 
 @app.route('/api/agents/<agent_id>', methods=['GET'])
 def api_get_agent(agent_id):
-    """Retorna dados de um agente específico"""
+    """Obtém detalhes de um agente específico."""
     agent = agent_manager.get_agent(agent_id)
     if agent:
         return jsonify(agent)
     return jsonify({'error': 'Agente não encontrado'}), 404
 
-@app.route('/api/agents', methods=['POST'])
-def api_create_agent():
-    """API: Criar um novo agente"""
-    try:
-        data = request.json
-        if not data or 'name' not in data or 'description' not in data:
-            return jsonify({'error': 'Dados incompletos'}), 400
-        
-        agent_id = agent_manager.create_agent(data)
-        return jsonify({'success': True, 'agent_id': agent_id})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/agents/<agent_id>', methods=['PUT'])
 def api_update_agent(agent_id):
-    """API: Atualizar um agente"""
-    try:
-        data = request.json
-        if not agent_manager.update_agent(agent_id, data):
-            return jsonify({'error': 'Agente não encontrado'}), 404
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Atualiza um agente existente."""
+    data = request.get_json()
+    if not agent_manager.update_agent(agent_id, data):
+        return jsonify({'error': 'Agente não encontrado'}), 404
+    return jsonify({'success': True})
 
 @app.route('/api/agents/<agent_id>', methods=['DELETE'])
 def api_delete_agent(agent_id):
@@ -392,58 +422,111 @@ def api_get_agent_files(agent_id):
 
 @app.route('/api/agents/<agent_id>/files/<filename>', methods=['DELETE'])
 def api_delete_agent_file(agent_id, filename):
-    """API: Deletar um arquivo de um agente"""
     success = agent_manager.delete_agent_file(agent_id, filename)
-    return jsonify({'success': success})
+    if success:
+        return jsonify({'success': True}), 200
+    return jsonify({'error': 'Falha ao deletar o arquivo'}), 400
 
-@app.route('/api/agents/<string:agent_id>/query', methods=['POST'])
-def query_agent(agent_id):
-    """Consulta um agente específico"""
+@app.route('/api/agents/<string:agent_id>/ingest_data', methods=['POST'])
+def api_ingest_data(agent_id):
+    """
+    API: Recebe dados (ex: de uma extensão de navegador) e os ingere como um novo documento para um agente.
+    """
     try:
-        data = request.json
-        user_input = data.get('input')
+        page_data = request.json
+        if not page_data or 'content' not in page_data:
+            return jsonify({'error': 'Dados inválidos. "content" é obrigatório.'}), 400
+
+        agent = agent_manager.get_agent(agent_id)
+        if not agent:
+            return jsonify({'error': 'Agente não encontrado'}), 404
+
+        # Aqui, futuramente, chamaremos um método mais robusto no AgentManager
+        # para criar o documento, fazer o chunking e vetorizar.
+        # Por enquanto, vamos simular a criação do documento.
         
-        agent_data = agent_manager.get_agent(agent_id)
-        if not agent_data:
-            return jsonify({"error": "Agente não encontrado"}), 404
+        doc_text = page_data.get('content')
+        doc_title = page_data.get('title', 'Sem Título')
+        doc_url = page_data.get('url', '')
 
-        # Caminho para o diretório de upload e vector_db específico do agente
-        agent_upload_dir = agent_data['folder_path']
-        agent_vector_db_path = agent_data['vector_db_path']
+        # Lógica para salvar em 'documentos_mestre'
+        # Esta lógica deve ser movida para o AgentManager em um próximo passo
+        conn = Database.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                query = """
+                    INSERT INTO documentos_mestre (id_agente, nome_arquivo, tipo_origem, texto_bruto, hash_md5)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id_doc;
+                """
+                # Gera um hash simples para evitar duplicatas exatas
+                hash_md5 = hashlib.md5(doc_text.encode()).hexdigest()
+                
+                params = (agent_id, doc_title, 'webapp_scrape', doc_text, hash_md5)
+                
+                cursor.execute(query, params)
+                new_doc_id = cursor.fetchone()[0]
+                conn.commit()
+                logger.info(f"Novo documento '{doc_title}' ingerido para o agente {agent_id} com ID: {new_doc_id}")
+        finally:
+            Database.release_connection(conn)
 
-        # Inicializar o RAGSystem para o agente
-        rag_system = RAGSystem(
-            upload_dir=agent_upload_dir,
-            vector_db_path=agent_vector_db_path,
-            collection_name=f"agent_{agent_id}"
-        )
+        # TODO: Chamar o processo de vetorização para este novo documento
 
-        system_prompt = agent_data.get('system_prompt') or "Você é um assistente de IA. Responda às perguntas com base nos documentos fornecidos."
-
-        # Criar a configuração do agente
-        config = AgentConfig(
-            model_name=agent_data.get('model_name', 'gpt-4o-mini'),
-            temperature=float(agent_data.get('temperature', 0.7)),
-            system_prompt=system_prompt,
-            tools=agent_data.get('tools', ['rag_query', 'search_documents']),
-            memory=agent_data.get('memory', True),
-            max_iterations=int(agent_data.get('max_iterations', 5))
-        )
-
-        # Criar e executar o agente
-        agent_executor = BaseAgent(
-            config=config,
-            rag_system=rag_system
-        )
-        
-        response = agent_executor.run(user_input)
-        
-        return jsonify({"response": response})
+        return jsonify({'success': True, 'message': f'Dados da página "{doc_title}" recebidos.', 'doc_id': new_doc_id}), 201
 
     except Exception as e:
-        logging.error(f"Erro ao consultar agente: {e}")
-        # Use str(e) para garantir que a exceção seja serializável para JSON
-        return jsonify({"response": f"Ocorreu um erro: {str(e)}"})
+        # Tratar erro de hash duplicado (violates unique constraint)
+        if 'violates unique constraint' in str(e):
+             return jsonify({'success': False, 'message': 'Este documento já existe na base de conhecimento.'}), 409
+        
+        logger.error(f"Erro ao ingerir dados: {e}")
+        return jsonify({'error': f'Ocorreu um erro interno: {str(e)}'}), 500
+
+@app.route('/api/agents/<agent_id>/process_files', methods=['POST'])
+def api_process_agent_files(agent_id):
+    """API: Processar (vetorizar) os arquivos de um agente"""
+    try:
+        agent = agent_manager.get_agent(agent_id)
+        if not agent:
+            return jsonify({'error': 'Agente não encontrado'}), 404
+        
+        # Inicializar RAGSystem para indexação
+        rag_system = RAGSystem(
+            upload_dir=agent['folder_path'],
+            vector_db_path=agent['vector_db_path'],
+            collection_name=f"agent_{agent_id}"
+        )
+        
+        # Usar a classe DocumentLoader para carregar os arquivos
+        doc_loader = DocumentLoader()
+        documents = doc_loader.load_documents_from_directory(agent['folder_path'])
+        
+        # Indexar os documentos
+        rag_system.add_documents(documents)
+        
+        logger.info(f"Arquivos do agente {agent_id} foram processados e vetorizados.")
+        return jsonify({'success': True, 'message': f'{len(documents)} chunks de documentos foram processados.'})
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar arquivos do agente {agent_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/agents/<string:agent_id>/query', methods=['POST'])
+def query_agent_route(agent_id):
+    """API: Envia uma pergunta para um agente e obtém uma resposta."""
+    data = request.get_json()
+    question = data.get('question')
+
+    if not question:
+        return jsonify({'error': 'A pergunta é obrigatória'}), 400
+
+    try:
+        result = agent_manager.query_agent(agent_id, question)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Erro na rota de query para o agente {agent_id}: {e}")
+        return jsonify({'error': f'Ocorreu um erro interno: {e}'}), 500
 
 @app.route('/download/<agent_id>')
 def download_agent_files(agent_id):

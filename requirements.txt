@@ -28,14 +28,14 @@ seaborn>=0.12.0
 # Processamento de texto
 nltk>=3.8.1
 spacy>=3.6.0
-textract>=1.6.5
+# textract>=1.6.5
 
 # Utilitários
 python-dotenv>=1.0.0
 requests>=2.31.0
 aiohttp>=3.8.5
 asyncio>=3.4.3
-tqdm>=4.65.0
+tqdm>=4.62.0
 colorama>=0.4.6
 
 # Desenvolvimento e testes
@@ -59,7 +59,7 @@ passlib>=1.7.4
 
 # Cache e performance
 redis>=4.6.0
-memcached>=1.59
+# memcached>=1.59
 
 # Processamento de imagens (opcional)
 Pillow>=10.0.0
@@ -72,4 +72,8 @@ statsmodels>=0.14.0
 # Machine Learning (opcional)
 torch>=2.0.0
 transformers>=4.30.0
-datasets>=2.14.0 
+datasets>=2.14.0
+
+# Adicionado para conexão com PostgreSQL e gerenciamento de .env
+psycopg2-binary
+python-dotenv 

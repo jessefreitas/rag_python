@@ -390,57 +390,44 @@
             document.getElementById('chatInput').focus();
         }
 
-        function sendMessage() {
+        // Função para enviar mensagem
+        async function sendMessage() {
             const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            // Adicionar mensagem do usuário
-            addMessage(message, 'user');
+            const question = input.value.trim();
+            if (question === '') return;
+
+            addMessage(question, 'user');
             input.value = '';
-            
-            // Mostrar loading
-            addMessage('Processando...', 'agent', true);
-            
-            // Enviar para API
-            fetch(`/api/agents/${agentId}/query`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ question: message })
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Remover loading
-                removeLoadingMessage();
-                
-                if (data.success) {
-                    addMessage(data.answer, 'agent');
-                } else {
-                    addMessage(`Erro: ${data.error}`, 'agent');
+
+            try {
+                // CORREÇÃO: Usar a variável agentId para montar a URL correta
+                const response = await fetch(`/api/agents/${agentId}/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro na resposta da API');
                 }
-            })
-            .catch(error => {
-                removeLoadingMessage();
-                addMessage(`Erro de conexão: ${error}`, 'agent');
-            });
+
+                const data = await response.json();
+                addMessage(data.response, 'agent');
+
+            } catch (error) {
+                console.error('Erro ao enviar mensagem:', error);
+                addMessage(`Erro: ${error.message}`, 'agent');
+            }
         }
 
-        function addMessage(text, type, loading = false) {
+        function addMessage(text, sender) {
             const container = document.getElementById('chatContainer');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            if (loading) messageDiv.className += ' loading';
+            messageDiv.className = `message ${sender}`;
             messageDiv.textContent = text;
             container.appendChild(messageDiv);
             container.scrollTop = container.scrollHeight;
-        }
-
-        function removeLoadingMessage() {
-            const loadingMessages = document.querySelectorAll('.message.loading');
-            loadingMessages.forEach(msg => msg.remove());
         }
 
         // Configurar input de chat

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Configurações - LegalLindaAI</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="icons/icon16.svg" alt="Ícone" class="logo">
+            <h1><i class="fa-solid fa-book-bookmark"></i> LegalLindaAI - Status</h1>
+        </header>
+        <main>
+            <div class="card">
+                <h3><i class="fa-solid fa-cloud"></i> Status das Conexões</h3>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span>Cloudflare R2:</span>
+                        <span id="r2-status" class="status-pending">Testando...</span>
+                        <button id="test-r2-button" class="secondary">Testar</button>
+                    </div>
+                    <div class="status-item">
+                        <span>OpenAI API:</span>
+                        <span id="openai-status" class="status-pending">Testando...</span>
+                        <button id="test-openai-button" class="secondary">Testar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fa-solid fa-robot"></i> Configurações da OpenAI</h3>
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="openai-enabled" checked>
+                        <span class="toggle-slider"></span>
+                        Processar texto com OpenAI (corrigir codificação)
+                    </label>
+                    <p class="help-text">Quando ativado, o texto será enviado para a OpenAI para correção de caracteres especiais. Quando desativado, o texto será salvo diretamente sem processamento.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fa-solid fa-cog"></i> Configurações</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="openai-enabled" checked>
+                        Processar texto com OpenAI (correção de caracteres)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="clean-structure-enabled" checked>
+                        Limpar estrutura DOM (remover elementos desnecessários)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="remove-css-classes" checked>
+                        Remover classes CSS desnecessárias
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="remove-progress-loaders" checked>
+                        Remover elementos de progresso/loading
+                    </label>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fa-solid fa-tools"></i> Ferramentas</h3>
+                <div class="button-group">
+                    <a href="test-r2.html" class="button secondary">
+                        <i class="fa-solid fa-shield-check"></i> Verificação de Integridade
+                    </a>
+                    <a href="debug.html" class="button secondary">
+                        <i class="fa-solid fa-bug"></i> Debug de Dados
+                    </a>
+                    <a href="logs.html" class="button secondary">
+                        <i class="fa-solid fa-list"></i> Logs do Sistema
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <div class="card" id="tags-section">
+            <h3><i class="fa-solid fa-tags"></i> Gerenciar Tags</h3>
+            <p>Adicione ou remova as tags que aparecerão no popup e no menu de contexto.</p>
+            <div class="form-group-inline">
+                <input type="text" id="new-tag-input" placeholder="Nova Tag">
+                <button id="add-tag-button" class="primary">Adicionar</button>
+            </div>
+            <ul id="tags-list">
+                <!-- Tags serão inseridas aqui pelo JavaScript -->
+            </ul>
+        </div>
+
+        <footer>
+            <div class="footer-buttons">
+                <a href="logs.html" id="logs-link"><i class="fa-solid fa-file-lines"></i> Ver Histórico de Logs</a>
+                <a href="debug.html" id="debug-link"><i class="fa-solid fa-bug"></i> Debug da Página</a>
+            </div>
+            <span class="version">v2.5.0</span>
+        </footer>
+    </div>
+    <script src="options.js"></script>
+</body>
+</html>

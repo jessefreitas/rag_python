@@ -37,13 +37,15 @@ class AgentResponse:
 
 # Definição de uma classe de configuração simples para manter a compatibilidade
 class AgentConfig:
-    def __init__(self, model_name="gpt-3.5-turbo", temperature=0.7, system_prompt="Você é um assistente prestativo.", memory=True, max_iterations=5, tools=None):
+    def __init__(self, agent_id=None, agent_name=None, model_name="gpt-3.5-turbo", temperature=0.7, system_prompt="Você é um assistente prestativo.", memory=True, max_iterations=5, tools=None):
+        self.agent_id = agent_id
+        self.agent_name = agent_name
         self.model_name = model_name
         self.temperature = temperature
         self.system_prompt = system_prompt
         self.memory = memory
         self.max_iterations = max_iterations
-        self.tools = tools if tools is not None else []
+        self.tools = tools if tools is not None else ["rag_query", "search_documents"]
 
 class BaseAgent:
     """Classe base para todos os agentes"""
@@ -117,12 +119,32 @@ class BaseAgent:
             return None
 
     def _rag_query_tool(self, query: str) -> str:
-        """Executa a consulta no sistema RAG"""
-        return self.rag_system.query(query)
+        """Executa a consulta no sistema RAG e retorna a resposta como string."""
+        try:
+            result = self.rag_system.query(query)
+            if result and result.get("success"):
+                return result.get("answer", "Não foi possível obter uma resposta.")
+            else:
+                return f"Ocorreu um erro ao consultar a base de conhecimento: {result.get('answer')}"
+        except Exception as e:
+            logging.error(f"Erro na ferramenta RAG: {e}")
+            return f"Exceção ao consultar a base de conhecimento: {str(e)}"
 
-    def _search_documents_tool(self, query: str) -> List[str]:
-        """Executa a busca por documentos similares"""
-        return self.rag_system.search_documents(query)
+    def _search_documents_tool(self, query: str) -> str:
+        """Executa a busca por documentos similares e retorna um resumo em string."""
+        try:
+            results = self.rag_system.search_similar_documents(query)
+            if not results:
+                return "Nenhum documento similar encontrado."
+            
+            # Formatar a saída como uma string simples
+            formatted_results = "\n\n---\n\n".join(
+                [f"Fonte: {doc.get('metadata', {}).get('source', 'N/A')}\nConteúdo: {doc.get('content', '')}" for doc in results]
+            )
+            return f"Encontrei {len(results)} documentos relevantes:\n\n{formatted_results}"
+        except Exception as e:
+            logging.error(f"Erro na ferramenta de busca: {e}")
+            return f"Exceção ao buscar documentos: {str(e)}"
     
     def run(self, user_input: str) -> str:
         """
@@ -140,14 +162,12 @@ class BaseAgent:
             self.memory.chat_memory.add_message(SystemMessage(content=self.config.system_prompt))
         
         try:
-            # result = self.agent.run(input=user_input, chat_history=self.memory.chat_memory.messages)
-            result = self.agent.run(user_input)
+            # Usar .invoke() que é o método atual e espera um dicionário.
+            result = self.agent.invoke({"input": user_input})
             
-            # Remover a mensagem do sistema do histórico para evitar duplicação
-            # if self.memory and self.memory.chat_memory.messages and isinstance(self.memory.chat_memory.messages[0], SystemMessage):
-            #     self.memory.chat_memory.messages.pop(0)
+            # O resultado de .invoke() é um dicionário, a resposta final está na chave 'output'
+            return result.get('output', "Desculpe, não consegui encontrar uma resposta.")
 
-            return result
         except Exception as e:
             logging.error(f"Erro ao executar o agente: {e}")
             # Tenta obter o erro de análise de saída
