@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "source_url": "https://www.example.com",
+  "source_title": "Example Domain",
+  "original_content_length": 187,
+  "total_chunks": 1,
+  "chunks": [
+    {
+      "text": "Example Domain\nThis domain is for use in illustrative examples in documents. You may use this\ndomain in literature without prior coordination or asking for permission.\nMore information...",
+      "metadata": {
+        "chunk_index": 0,
+        "chunk_size": 187,
+        "total_chunks": 1,
+        "source": "web_scraper",
+        "timestamp": "2025-06-22T03:53:12.625561"
+      },
+      "length": 187,
+      "embedding_dimensions": 1536,
+      "has_embedding": true
+    }
+  ],
+  "processing_info": {
+    "chunk_size": 500,
+    "chunk_overlap": 100,
+    "embedding_model": "text-embedding-3-small",
+    "timestamp": "2025-06-22T03:53:15.215120"
+  },
+  "scraping_info": {
+    "url": "https://www.example.com",
+    "title": "Example Domain",
+    "content_length": 187,
+    "protected": false,
+    "capture_timestamp": "2025-06-22T03:53:12.607269"
+  },
+  "embeddings_count": 1
+}

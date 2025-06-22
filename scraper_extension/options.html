@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configurações - RAG-Control</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { padding-top: 2rem; padding-bottom: 2rem; }
-        .container { max-width: 600px; }
-    </style>
+    <link href="style.css" rel="stylesheet">
 </head>
-<body>
+<body class="options-page">
     <div class="container">
         <h2 class="mb-4">Configurações</h2>
         <div id="status-message" class="alert d-none" role="alert"></div>
@@ -19,7 +16,7 @@
                 <form id="options-form">
                     <div class="mb-3">
                         <label for="api-url" class="form-label fw-bold">URL da API do Backend</label>
-                        <input type="url" class="form-control" id="api-url" placeholder="http://127.0.0.1:5000" required>
+                        <input type="url" class="form-control" id="api-url" placeholder="http://192.168.8.4:5000" required>
                         <div class="form-text">Insira o endereço completo do seu servidor Flask.</div>
                     </div>
                     <button type="submit" class="btn btn-primary">Salvar Configurações</button>

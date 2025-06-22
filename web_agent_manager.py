@@ -24,9 +24,74 @@ from database import Database
 from extension_api import extension_api_bp
 from agent_system import Agent
 from scraper import scrape_url # Importa a nova função
+from chrome_extension_manager import register_extension_api, test_extension_integration
 
-Database.initialize_pool()
+# Função para testar conectividade com o banco
+def test_database_connection():
+    """Testa a conectividade com o banco de dados PostgreSQL."""
+    try:
+        logging.info("🔍 Testando conectividade com o banco de dados...")
+        
+        # Inicializar pool de conexões
+        Database.initialize_pool()
+        
+        # Testar uma conexão
+        conn = Database.get_connection()
+        cursor = conn.cursor()
+        
+        # Executar uma query simples para testar
+        cursor.execute("SELECT version();")
+        version = cursor.fetchone()
+        
+        # Testar se as tabelas principais existem
+        cursor.execute("""
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name IN ('agents', 'documents', 'document_chunks', 'conversations', 'llm_responses')
+        """)
+        tables = cursor.fetchall()
+        table_names = [t[0] for t in tables]
+        
+        # Verificar extensão pgvector
+        cursor.execute("SELECT * FROM pg_extension WHERE extname = 'vector';")
+        vector_ext = cursor.fetchone()
+        
+        cursor.close()
+        Database.release_connection(conn)
+        
+        logging.info(f"✅ Conectividade com PostgreSQL confirmada")
+        logging.info(f"📊 Versão do banco: {version[0]}")
+        logging.info(f"📋 Tabelas encontradas: {table_names}")
+        
+        if vector_ext:
+            logging.info("🔗 Extensão pgvector está instalada")
+        else:
+            logging.warning("⚠️ Extensão pgvector não encontrada - necessária para embeddings")
+        
+        required_tables = {'agents', 'documents', 'document_chunks', 'conversations', 'llm_responses'}
+        missing_tables = required_tables - set(table_names)
+        
+        if missing_tables:
+            logging.warning(f"⚠️ Tabelas faltando: {missing_tables}")
+            logging.warning("Execute o arquivo schema.sql para criar as tabelas necessárias")
+        else:
+            logging.info("✅ Todas as tabelas necessárias estão presentes")
+        
+        return True
+        
+    except Exception as e:
+        logging.error(f"❌ Falha na conectividade com o banco de dados: {e}")
+        logging.error("Verifique se o PostgreSQL está rodando e as credenciais estão corretas no .env")
+        logging.error("Para configurar o banco, execute: psql -U postgres -d rag_database -f schema.sql")
+        return False
+
+# Inicializar banco de dados e testar conectividade
+if not test_database_connection():
+    logging.error("❌ Sistema não pode iniciar sem conectividade com o banco de dados")
+    exit(1)
+
+# Registrar APIs
 app.register_blueprint(extension_api_bp)
+register_extension_api(app)  # Nova API isolada da extensão
 
 @app.context_processor
 def inject_agent_class():

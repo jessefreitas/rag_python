@@ -327,16 +327,27 @@ class PGVectorStore:
         """Gera embeddings para os documentos e os salva no banco de dados."""
         logger.info(f"🔗 PGVectorStore: Iniciando adição de {len(documents)} documentos para agente {self.agent_id}")
         
+        # Verificar se há documentos para processar
+        if not documents:
+            logger.warning(f"⚠️ PGVectorStore: Nenhum documento fornecido para o agente {self.agent_id}")
+            return
+        
         texts = [doc.page_content for doc in documents]
         logger.info(f"📝 PGVectorStore: Extraídos {len(texts)} textos dos documentos")
         
-        logger.info(f"🧠 PGVectorStore: Gerando embeddings para {len(texts)} textos...")
-        embeddings = self.embedding_function(texts)
+        # Verificar se há textos válidos
+        valid_texts = [text for text in texts if text and text.strip()]
+        if not valid_texts:
+            logger.warning(f"⚠️ PGVectorStore: Nenhum texto válido encontrado para o agente {self.agent_id}")
+            return
+        
+        logger.info(f"🧠 PGVectorStore: Gerando embeddings para {len(valid_texts)} textos...")
+        embeddings = self.embedding_function(valid_texts)
         logger.info(f"✅ PGVectorStore: Embeddings gerados com sucesso ({len(embeddings)} embeddings)")
 
         # Usando a nova estrutura de tabelas
         # Primeiro, precisamos criar um 'document' mestre para estes chunks
-        source = documents[0].metadata.get('source', 'desconhecido')
+        source = documents[0].metadata.get('source', 'desconhecido') if documents else 'desconhecido'
         logger.info(f"📂 PGVectorStore: Fonte do documento: {source}")
         
         # Usar uma única transação para garantir consistência
@@ -354,15 +365,15 @@ class PGVectorStore:
                 logger.info(f"✅ PGVectorStore: Documento mestre criado com ID: {document_id}")
 
                 # Agora, insere cada chunk associado a esse novo document_id
-                logger.info(f"📄 PGVectorStore: Inserindo {len(texts)} chunks na tabela 'document_chunks'...")
+                logger.info(f"📄 PGVectorStore: Inserindo {len(valid_texts)} chunks na tabela 'document_chunks'...")
                 chunk_query = "INSERT INTO document_chunks (document_id, agent_id, chunk_text, embedding) VALUES (%s, %s, %s, %s)"
-                for i, text_chunk in enumerate(texts):
-                    logger.info(f"  - Inserindo chunk {i+1}/{len(texts)} (tamanho: {len(text_chunk)} chars)")
+                for i, text_chunk in enumerate(valid_texts):
+                    logger.info(f"  - Inserindo chunk {i+1}/{len(valid_texts)} (tamanho: {len(text_chunk)} chars)")
                     cur.execute(chunk_query, (document_id, self.agent_id, text_chunk, embeddings[i]))
                 
                 # Commit da transação
                 conn.commit()
-                logger.info(f"🎉 PGVectorStore: {len(documents)} chunks salvos no banco de dados para o agente {self.agent_id}")
+                logger.info(f"🎉 PGVectorStore: {len(valid_texts)} chunks salvos no banco de dados para o agente {self.agent_id}")
                 
         except Exception as e:
             logger.error(f"❌ PGVectorStore: Erro ao adicionar documentos: {e}", exc_info=True)

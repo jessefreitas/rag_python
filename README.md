@@ -95,6 +95,7 @@ rag_python/
 - [🔒 Isolamento de Segurança](SECURITY_ISOLATION.md)
 - [🔧 Solução de Problemas](TROUBLESHOOTING.md)
 - [📋 Log de Implementação](IMPLEMENTATION_LOG.md)
+- [🔌 Extensão Chrome Isolada](CHROME_EXTENSION_ISOLATED.md)
 
 ## 📝 Licença
 

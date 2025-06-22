@@ -132,23 +132,41 @@ class RAGSystem:
     def get_response(self, user_message: str, history: List[Dict[str, str]], system_prompt: str = "", temperature: float = 0.7, model: str = "gpt-4o-mini") -> str:
         """Gera uma resposta usando RAG ISOLADO para o agente."""
         try:
-            # Buscar contexto relevante da base do agente
+            if not llm_manager.get_active_provider():
+                logger.error("Nenhum provedor de LLM está configurado. Verifique as variáveis de ambiente (ex: OPENAI_API_KEY).")
+                return "Erro de configuração: Nenhum provedor de LLM foi configurado. Por favor, adicione uma chave de API nas configurações."
+
             context = self.get_relevant_context(user_message)
             
-            # Construir prompt com contexto
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
             if context:
-                enhanced_prompt = f"{system_prompt}\n\nContexto relevante:\n{context}\n\nPergunta do usuário: {user_message}"
-            else:
-                enhanced_prompt = f"{system_prompt}\n\nPergunta do usuário: {user_message}"
+                context_message = f"Use o seguinte contexto para responder à pergunta do usuário:\n\n---\n{context}\n---"
+                if messages and messages[0]['role'] == 'system':
+                    messages[0]['content'] += "\n\n" + context_message
+                else:
+                    messages.insert(0, {"role": "system", "content": context_message})
+
+            if history:
+                messages.extend(history)
             
-            # Gerar resposta usando o LLM
-            llm = llm_manager.get_llm_instance(model=model, temperature=temperature)
-            response = llm.invoke(enhanced_prompt)
+            messages.append({"role": "user", "content": user_message})
+
+            response_text = llm_manager.generate_response(
+                messages,
+                model=model,
+                temperature=temperature
+            )
             
-            return response.content if hasattr(response, 'content') else str(response)
+            return response_text
             
         except Exception as e:
-            logger.error(f"Erro ao gerar resposta para o agente {self.agent_id}: {e}")
+            logger.error(f"Erro ao gerar resposta para o agente {self.agent_id}: {e}", exc_info=True)
+            error_str = str(e).lower()
+            if 'authentication' in error_str or 'api key' in error_str or 'api-key' in error_str:
+                return "Erro de autenticação: A chave da API é inválida ou está faltando. Verifique suas credenciais."
             return "Desculpe, ocorreu um erro ao processar sua solicitação."
 
     def get_multi_response(self, user_message: str, context: str, history: List[Dict[str, str]], system_prompt: str, temperature: float, providers: List[str]) -> Dict[str, Any]:

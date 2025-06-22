@@ -8,10 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton: document.getElementById('save-button'),
         saveButtonText: document.getElementById('save-button-text'),
         saveSpinner: document.getElementById('save-spinner'),
+        pageInfo: document.getElementById('page-info'),
+        agentCount: document.getElementById('agent-count')
     };
 
     let apiUrl = '';
     let currentUrl = '';
+    let currentTitle = '';
 
     // Funções de controle de estado da UI
     const showLoading = () => {
@@ -35,80 +38,197 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const setSaving = (isSaving) => {
         ui.saveButton.disabled = isSaving;
-        ui.saveButtonText.textContent = isSaving ? 'Salvando...' : 'Salvar';
+        ui.saveButtonText.textContent = isSaving ? 'Capturando...' : 'Capturar Página';
         ui.saveSpinner.classList.toggle('d-none', !isSaving);
+    };
+
+    // Função para validar configurações
+    const validateSettings = async () => {
+        const settings = await chrome.storage.sync.get(['apiUrl']);
+        apiUrl = settings.apiUrl;
+        
+        console.log('API URL configurada:', apiUrl); // Debug
+        
+        if (!apiUrl) {
+            throw new Error('URL da API não configurada. Acesse as opções da extensão e configure: http://192.168.8.4:5000');
+        }
+        
+        // Testar conectividade com a nova API isolada
+        try {
+            console.log('Testando conectividade com:', `${apiUrl}/api/v1/extension/health`); // Debug
+            
+            const response = await fetch(`${apiUrl}/api/v1/extension/health`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors'
+            });
+            
+            console.log('Response status:', response.status); // Debug
+            
+            if (!response.ok) throw new Error(`API não disponível: ${response.status} ${response.statusText}`);
+            
+            const health = await response.json();
+            console.log('Health response:', health); // Debug
+            
+            if (!health.success) throw new Error('API da extensão não está funcionando');
+            
+        } catch (error) {
+            console.error('Erro de conectividade:', error); // Debug
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error(`Não foi possível conectar ao servidor. Verifique se o servidor está rodando em ${apiUrl}`);
+            }
+            throw new Error(`Falha na conectividade: ${error.message}`);
+        }
+    };
+
+    // Função para obter informações da aba atual
+    const getCurrentPageInfo = async () => {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tab = tabs[0];
+        
+        if (!tab?.url || !tab.url.startsWith('http')) {
+            throw new Error('A página atual não é uma URL válida para captura.');
+        }
+        
+        currentUrl = tab.url;
+        currentTitle = tab.title || 'Página sem título';
+        
+        // Atualizar UI com informações da página
+        if (ui.pageInfo) {
+            ui.pageInfo.innerHTML = `
+                <strong>Página:</strong> ${currentTitle}<br>
+                <small class="text-muted">${currentUrl}</small>
+            `;
+        }
+    };
+
+    // Função para carregar agentes da nova API
+    const loadAgents = async () => {
+        try {
+            const response = await fetch(`${apiUrl}/api/v1/extension/agents`);
+            if (!response.ok) throw new Error(`Erro de rede: ${response.statusText}`);
+            
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Erro desconhecido');
+            
+            const agents = result.agents;
+            if (agents.length === 0) {
+                throw new Error('Nenhum agente ativo encontrado. Crie um agente no sistema primeiro.');
+            }
+
+            // Preencher select de agentes
+            ui.agentSelect.innerHTML = agents.map(agent => 
+                `<option value="${agent.id}" title="${agent.description || ''}">${agent.name}</option>`
+            ).join('');
+            
+            // Atualizar contador de agentes
+            if (ui.agentCount) {
+                ui.agentCount.textContent = `${agents.length} agente(s) disponível(is)`;
+            }
+            
+            return agents;
+            
+        } catch (error) {
+            throw new Error(`Falha ao carregar agentes: ${error.message}`);
+        }
     };
 
     // Função Principal de Inicialização
     const initialize = async () => {
         showLoading();
 
-        // 1. Obter a URL da API das configurações
-        const settings = await chrome.storage.sync.get('apiUrl');
-        apiUrl = settings.apiUrl;
-        if (!apiUrl) {
-            showError('URL da API não configurada. Por favor, acesse as opções da extensão.');
-            return;
-        }
-
-        // 2. Obter a URL da aba ativa
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        currentUrl = tabs[0]?.url;
-        if (!currentUrl || !currentUrl.startsWith('http')) {
-            showError('A página atual não é uma URL válida para captura.');
-            return;
-        }
-
-        // 3. Buscar a lista de agentes da API
         try {
-            const response = await fetch(`${apiUrl}/api/v1/agents`);
-            if (!response.ok) throw new Error(`Erro de rede: ${response.statusText}`);
+            // 1. Validar configurações e conectividade
+            await validateSettings();
             
-            const agents = await response.json();
-            if (agents.length === 0) {
-                showError('Nenhum agente encontrado. Crie um agente no sistema primeiro.');
-                return;
-            }
+            // 2. Obter informações da página atual
+            await getCurrentPageInfo();
 
-            ui.agentSelect.innerHTML = agents.map(agent => `<option value="${agent.id}">${agent.name}</option>`).join('');
+            // 3. Carregar lista de agentes
+            await loadAgents();
+            
             showMain();
+            
         } catch (error) {
-            showError(`Falha ao carregar agentes: ${error.message}`);
+            showError(error.message);
         }
     };
 
-    // Lógica para o botão Salvar
-    const handleSave = async () => {
+    // Lógica para o botão Capturar
+    const handleCapture = async () => {
         const agentId = ui.agentSelect.value;
-        if (!agentId) return;
+        if (!agentId) {
+            showError('Por favor, selecione um agente.');
+            return;
+        }
 
         setSaving(true);
         
         try {
-            const response = await fetch(`${apiUrl}/api/v1/capture_page`, {
+            console.log('Iniciando captura para agente:', agentId); // Debug
+            console.log('URL a capturar:', currentUrl); // Debug
+            
+            // Usar a nova API isolada para captura
+            const response = await fetch(`${apiUrl}/api/v1/extension/capture_page`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ agent_id: agentId, url: currentUrl })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors',
+                body: JSON.stringify({ 
+                    agent_id: agentId, 
+                    url: currentUrl 
+                })
             });
 
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Ocorreu um erro desconhecido.');
+            console.log('Capture response status:', response.status); // Debug
+            
+            let result;
+            try {
+                result = await response.json();
+                console.log('Capture response:', result); // Debug
+            } catch (jsonError) {
+                console.error('Erro ao parsear JSON:', jsonError); // Debug
+                throw new Error('Resposta inválida do servidor');
+            }
+            
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `Erro HTTP ${response.status}: ${response.statusText}`);
+            }
 
-            chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon16.png',
-                title: 'Sucesso!',
-                message: result.message
-            });
-            window.close(); // Fecha o popup
+            // Notificação de sucesso
+            try {
+                chrome.notifications.create({
+                    type: 'basic',
+                    title: '🎉 Captura Realizada!',
+                    message: `Página adicionada ao agente "${result.agent_name}"`
+                });
+            } catch (error) {
+                console.log('Notificação não pôde ser criada:', error);
+            }
+            
+            // Fechar popup após sucesso
+            setTimeout(() => window.close(), 1000);
 
         } catch (error) {
+            console.error('Erro na captura:', error); // Debug
             setSaving(false);
-            showError(`Falha ao salvar: ${error.message}`);
+            
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                showError(`Não foi possível conectar ao servidor. Verifique se está rodando em ${apiUrl}`);
+            } else {
+                showError(`Falha na captura: ${error.message}`);
+            }
         }
     };
 
-    // Adiciona o event listener e inicializa
-    ui.saveButton.addEventListener('click', handleSave);
+    // Event Listeners
+    ui.saveButton.addEventListener('click', handleCapture);
+    
+    // Inicializar a extensão
     initialize();
 }); 
