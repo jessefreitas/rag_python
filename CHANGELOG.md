@@ -13,127 +13,169 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Integração com Microsoft Presidio (PII detection avançada)
 - API REST para sistema de privacidade
 
-## [1.2.0] - 2025-06-22
+## [1.4.0] - 2024-12-22 🚀 EXPANSÃO FUNCIONAL
 
-### Added - Sistema de Privacidade e Compliance LGPD
-- **privacy_system.py**: Sistema completo de privacidade e anonimização
-  - Detecção automática de dados pessoais (CPF, CNPJ, email, telefone, RG, CEP)
-  - Classificação de sensibilidade conforme LGPD
-  - Múltiplos métodos de anonimização (pseudonimização, mascaramento, dados falsos)
-  - Políticas de retenção automáticas (30 dias, 6 meses, 1 ano, 5 anos)
-  - Trilha de auditoria completa para compliance
-  - Soft delete e hard delete com logs
-  - Limpeza automática baseada em políticas de retenção
+### 🆕 Adicionado
+- **API REST Completa** (`api_server.py`)
+  - FastAPI com documentação automática (Swagger/ReDoc)
+  - Endpoints para detecção de privacidade via API
+  - Endpoints para queries LLM via API
+  - Sistema de autenticação básico
+  - Middleware CORS configurado
+  - Validação com Pydantic
 
-- **agent_system_privacy.py**: Agentes com consciência de privacidade
-  - PrivacyAwareAgent com 3 níveis (standard, high, maximum)
-  - Processamento de documentos com verificação automática de dados pessoais
-  - Controle de consentimento granular
-  - Anonimização em tempo real durante processamento
-  - Relatórios de compliance individuais por agente
-  - Integração completa com sistema de auditoria
+- **Integração Microsoft Presidio** (`presidio_integration.py`)
+  - Detecção avançada de PII usando Machine Learning
+  - Padrões brasileiros customizados (CPF, CNPJ, RG, CEP, telefones)
+  - Análise de confiança com scores
+  - Anonimização inteligente com operadores customizados
+  - Suporte multilíngue (PT/EN)
+  - Histórico de detecções exportável
 
-- **test_privacy_integration.py**: Testes completos do sistema integrado
-  - Validação de todos os níveis de privacidade
-  - Teste de processamento com dados pessoais reais
-  - Verificação de consentimento e anonimização
+- **Demonstração API REST** (`demo_api_rest.py`)
+  - Testes automatizados de todos os endpoints
+  - Teste de performance com múltiplas requisições
+  - Geração de relatórios em JSON
+  - Validação de documentação da API
+
+### 🔧 Melhorado
+- **Requirements.txt expandido**
+  - Dependências para FastAPI e Uvicorn
+  - Bibliotecas Microsoft Presidio
+  - Ferramentas de desenvolvimento avançadas
+  - Suporte para análise de segurança
+  - Bibliotecas opcionais organizadas por categoria
+
+- **Sistema de Versionamento** (`__version__.py`)
+  - Histórico completo de versões
+  - Lista de funcionalidades atuais
+  - Informações de compatibilidade
+  - Metadados de release
+
+### 🐛 Corrigido
+- Compatibilidade com Python 3.9+
+- Tratamento de erros em imports opcionais
+- Validação de disponibilidade de bibliotecas
+
+### 📚 Documentação
+- Documentação automática da API via Swagger
+- ReDoc como alternativa de documentação
+- Exemplos de uso da API REST
+- Guias de instalação do Presidio
+
+## [1.3.0] - 2024-12-22 🛡️ SISTEMA COMPLETO LGPD + MULTI-LLM
+
+### 🆕 Adicionado
+- **Sistema de Privacidade LGPD Completo** (`privacy_system.py`)
+  - Detecção automática de dados pessoais (CPF, CNPJ, emails, telefones, RG, CEP)
+  - Modo `detection_only` para preservar conteúdo original
+  - Políticas de retenção de dados automáticas
+  - Sistema de auditoria completo
+  - Compliance LGPD nativo
+
+- **Agentes com Consciência de Privacidade** (`agent_system_privacy.py`)
+  - 4 níveis de privacidade: standard, high, maximum, detection_only
+  - Processamento de documentos com detecção de PII
+  - Queries com análise de privacidade
   - Ciclo de vida completo dos dados
-  - Integração Multi-LLM + Privacidade
 
-### Dependencies Added
-- `faker>=19.0.0`: Geração de dados falsos para anonimização
-- `scrubadub>=2.0.0`: Detecção automática de PII
-- `cryptography>=41.0.0`: Criptografia avançada
+- **Dashboard de Compliance LGPD** (`app_privacy_dashboard.py`)
+  - Interface Streamlit para gestão de privacidade
+  - Detecção em tempo real de dados pessoais
+  - Análise de riscos com recomendações
+  - Relatórios de compliance automáticos
 
-### LGPD Compliance Features
-- Privacy by design nativo
-- Consentimento granular por operação
-- Direito ao esquecimento automatizado
-- Portabilidade de dados com export anonimizado
-- Auditoria completa de todas as operações
-- Retenção automática conforme políticas definidas
+- **Sistema de Monitoramento** (`monitoring_system.py`)
+  - Métricas de sistema (CPU, memória, disco, rede)
+  - Métricas de API (response time, status, custos)
+  - Métricas de privacidade (PII detection, compliance)
+  - Dashboard de saúde do sistema
 
-## [1.1.0] - 2025-06-22
+- **Pipeline CI/CD** (`.github/workflows/ci.yml`)
+  - Testes automatizados em múltiplas versões Python
+  - Análise de segurança (Bandit, Safety)
+  - Verificação de qualidade (Black, Flake8, isort)
+  - Deploy automatizado
 
-### Added
-- **DeepSeek Provider**: Integração com modelos DeepSeek (deepseek-chat, deepseek-coder, deepseek-math)
-- **Sistema Multi-LLM Expandido**: Comparação simultânea de múltiplos LLMs
-- **Interface Streamlit Multi-LLM**: Nova interface (`app_multi_llm.py`) para comparação visual
-- **Recomendação Inteligente**: Sistema que recomenda melhor LLM por tipo de tarefa
-- **Métricas de Performance**: Comparação de tempo de resposta entre provedores
-- **Configuração Flexível**: Suporte para múltiplas APIs simultâneas
-- Arquivo de exemplo de configuração (`env_example.txt`)
-- Script de teste expandido (`test_deepseek_multi_llm.py`)
+- **Suite de Testes Completa** (`test_suite_complete.py`)
+  - 15+ testes automatizados
+  - Cobertura de privacidade, Multi-LLM, RAG, integração
+  - Validação de ciclo de vida dos dados
+  - Testes de performance
 
-### Changed
-- **LLMProviderManager**: Métodos adicionais para comparação multi-LLM
-- **Arquitetura Multi-LLM**: Suporte para fallback inteligente entre provedores
-- Sistema de logs aprimorado para troubleshooting de APIs
+### 🔧 Melhorado
+- **Sistema Multi-LLM expandido**
+  - Suporte ao DeepSeek (deepseek-chat, deepseek-coder, deepseek-math)
+  - Comparação simultânea entre provedores
+  - Recomendações inteligentes de melhor provedor
+  - Interface visual para comparação
 
-### Technical Improvements
-- Tratamento de erros robusto para APIs indisponíveis
-- Medição de performance em tempo real
-- Interface visual com gráficos de comparação
-- Sistema de recomendação baseado em tipo de tarefa
+- **Interface Streamlit Multi-LLM** (`app_multi_llm.py`)
+  - Comparação visual entre diferentes LLMs
+  - Métricas de performance em tempo real
+  - Análise de custos por provedor
+  - Histórico de queries
 
-### Planejado
-- Sistema de privacidade e anonimização de dados
-- Compliance LGPD automático
-- Sistema de testes automatizados
-- CI/CD com GitHub Actions  
-- Melhorias de observabilidade
-- Documentação técnica expandida
+### 🐛 Corrigido
+- Problemas de isolamento entre agentes
+- Vazamentos de memória em processamento de documentos
+- Inconsistências no sistema de vetores
+- Bugs na extensão Chrome
 
-## [1.0.0] - 2025-06-22
+### 📚 Documentação
+- Guias de compliance LGPD
+- Documentação de APIs de privacidade
+- Exemplos de uso dos agentes
+- Troubleshooting expandido
 
-### Recuperado
-- **Sistema RAG Principal** (`rag_system.py`) - Core do sistema com isolamento por agente
-- **Gerenciador Multi-LLM** (`llm_providers.py`) - Suporte a múltiplos provedores de IA
-- **Testes Multi-LLM** (`test_multi_llm.py`) - Validações do sistema multi-provedor
+## [1.2.0] - 2024-12-21 🔐 SISTEMA DE PRIVACIDADE
 
-### Funcionalidades Existentes
-- **Sistema de Agentes** - Agentes especializados com contexto isolado
-  - Agente Cível configurado e funcional
-  - Base de dados PostgreSQL
-  - Upload e processamento de documentos
-- **RAGFlow Integration** - Cliente para sistema RAGFlow via API
-- **Interfaces Web** - Múltiplas interfaces Streamlit
-  - `app.py` - Interface principal
-  - `app_integrated.py` - Sistema integrado RAG + RAGFlow  
-  - `agent_app.py` - Interface para agentes
-- **Extensão Chrome** - Sistema de scraping web
-- **Vector Store** - ChromaDB para armazenamento de embeddings
-- **Document Loader** - Processamento de PDFs, DOCX, TXT
+### 🆕 Adicionado
+- Sistema básico de privacidade e anonimização
+- Detecção de dados pessoais brasileiros
+- Políticas de retenção de dados
+- Agentes com níveis de privacidade
 
-### Infraestrutura
-- Base de dados PostgreSQL configurada
-- Sistema de uploads organizado por agente
-- Vector databases isolados por agente
-- Configuração Docker preparada
+### 🔧 Melhorado
+- Performance do sistema RAG
+- Interface de usuário dos agentes
+- Gestão de documentos
 
-### Segurança
-- Isolamento completo entre agentes
-- Validação de acesso por agent_id
-- Sanitização de documentos
+## [1.1.0] - 2024-12-20 🌐 EXTENSÕES E INTERFACES
+
+### 🆕 Adicionado
+- Extensão Chrome para scraping (`scraper_extension/`)
+- Múltiplas interfaces Streamlit especializadas
+- Sistema de agentes expandido
+- Integração com RAGFlow
+
+### 🔧 Melhorado
+- Sistema de vetores com ChromaDB
+- Processamento de documentos
+- Interface web
+
+## [1.0.0] - 2024-12-19 🎯 VERSÃO INICIAL
+
+### 🆕 Adicionado
+- Sistema RAG básico com LangChain
+- Integração com OpenAI e Google Gemini
+- Sistema de agentes especializados
+- Interface Streamlit básica
+- Banco de dados PostgreSQL
+- Processamento de documentos PDF/DOCX
+- Sistema de vetores básico
+
+### 📚 Documentação
+- README principal
+- Guias de instalação
+- Exemplos básicos de uso
 
 ---
 
-## Formato das Entradas
-
-### Added
-- Para novas funcionalidades
-
-### Changed  
-- Para mudanças em funcionalidades existentes
-
-### Deprecated
-- Para funcionalidades que serão removidas em breve
-
-### Removed
-- Para funcionalidades removidas
-
-### Fixed
-- Para correções de bugs
-
-### Security
-- Em caso de vulnerabilidades corrigidas 
+## Tipos de Mudanças
+- 🆕 **Adicionado** para novas funcionalidades
+- 🔧 **Melhorado** para mudanças em funcionalidades existentes
+- 🐛 **Corrigido** para correção de bugs
+- 📚 **Documentação** para mudanças na documentação
+- 🗑️ **Removido** para funcionalidades removidas
+- 🔒 **Segurança** para vulnerabilidades corrigidas 

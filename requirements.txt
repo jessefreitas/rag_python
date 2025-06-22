@@ -1,134 +1,120 @@
-# Dependências principais
+# RAG Python v1.4.0 - Dependências Completas
+# Sistema RAG com Privacidade LGPD, Multi-LLM e API REST
+
+# === CORE SYSTEM ===
 streamlit>=1.28.0
-openai>=1.0.0
 langchain>=0.1.0
-langchain-openai>=0.0.5
 langchain-community>=0.0.10
-
-# Provedores de IA adicionais
-google-generativeai>=0.3.0
-requests>=2.31.0
-
-# Processamento de documentos
-python-docx>=0.8.11
-PyPDF2>=3.0.1
-pypdf>=3.17.0
-python-pptx>=0.6.21
-openpyxl>=3.1.2
-pandas>=2.0.0
-
-# Vetores e embeddings
-sentence-transformers>=2.2.2
-faiss-cpu>=1.7.4
-numpy>=1.24.0
-scikit-learn>=1.3.0
-
-# Interface e visualização
-plotly>=5.17.0
-altair>=5.1.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-
-# Processamento de texto
-nltk>=3.8.1
-spacy>=3.6.0
-# textract>=1.6.5
-
-# Utilitários
+langchain-openai>=0.0.5
+langchain-google-genai>=0.0.6
 python-dotenv>=1.0.0
-aiohttp>=3.8.5
-asyncio>=3.4.3
-tqdm>=4.62.0
-colorama>=0.4.6
+requests>=2.31.0
+urllib3>=2.0.0
 
-# Desenvolvimento e testes
-pytest>=7.4.0
-black>=23.7.0
-flake8>=6.0.0
-mypy>=1.5.0
+# === DATABASES ===
+chromadb>=0.4.15
+psycopg2-binary>=2.9.7
+sqlalchemy>=2.0.21
 
-# Deploy e produção
-gunicorn>=21.2.0
-uvicorn>=0.23.0
-fastapi>=0.103.0
+# === LLM PROVIDERS ===
+openai>=1.6.0
+google-generativeai>=0.3.0
+anthropic>=0.8.0
 
-# Monitoramento e logs
-structlog>=23.1.0
-prometheus-client>=0.17.0
+# === PRIVACY & SECURITY (v1.4.0) ===
+presidio-analyzer>=2.2.33
+presidio-anonymizer>=2.2.33
+spacy>=3.7.0
+# Para modelos spaCy (instalar separadamente):
+# python -m spacy download pt_core_news_sm
+# python -m spacy download en_core_web_sm
 
-# Segurança
-cryptography>=41.0.0
-passlib>=1.7.4
-
-# Cache e performance
-redis>=4.6.0
-# memcached>=1.59
-
-# Processamento de imagens (opcional)
-Pillow>=10.0.0
-opencv-python>=4.8.0
-
-# Análise de dados avançada
-scipy>=1.11.0
-statsmodels>=0.14.0
-
-# Machine Learning (opcional)
-torch>=2.0.0
-transformers>=4.30.0
-datasets>=2.14.0
-
-# Adicionado para conexão com PostgreSQL e gerenciamento de .env
-psycopg2-binary
-python-dotenv
-
-# Adicionado para conexão com PostgreSQL e gerenciamento de .env
-pgvector
-
-# Adicionado para conexão com PostgreSQL e gerenciamento de .env
-chromadb
-
-# Adicionado para conexão com PostgreSQL e gerenciamento de .env
-beautifulsoup4
-
-# Adicionado para conexão com PostgreSQL e gerenciamento de .env
-playwright
-
-# === NOVAS DEPENDÊNCIAS - GERAÇÃO DE DOCUMENTOS JURÍDICOS ===
-# FastAPI para APIs de geração de documentos
+# === API REST (v1.4.0) ===
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-
-# Geração de documentos Word/PDF
-jinja2>=3.1.2
-python-docx>=0.8.11
-docx2pdf>=0.1.8  # Windows only - conversão DOCX para PDF
-
-# Autenticação e segurança para APIs
-python-jose[cryptography]>=3.3.0
+pydantic>=2.5.0
 python-multipart>=0.0.6
 
-# Orquestração de agentes
-crewai>=0.1.0
+# === DOCUMENT PROCESSING ===
+pypdf2>=3.0.1
+python-docx>=0.8.11
+openpyxl>=3.1.2
+pandas>=2.1.0
 
-# Storage avançado (opcional)
-boto3>=1.29.0  # Para S3 se necessário
+# === WEB SCRAPING ===
+beautifulsoup4>=4.12.2
+selenium>=4.15.0
 
-# Templates e validação
-pydantic>=2.5.0
+# === MONITORING & METRICS (v1.3.0) ===
+psutil>=5.9.0
+prometheus-client>=0.19.0
 
-# === PRIVACIDADE E ANONIMIZAÇÃO - LGPD ===
-# Geração de dados falsos para anonimização
-faker>=19.0.0
+# === TESTING ===
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
 
-# Detecção e remoção de dados pessoais
-scrubadub>=2.0.0
+# === SECURITY ANALYSIS ===
+bandit[toml]>=1.7.5
+safety>=2.3.0
 
-# Análise avançada de dados pessoais (opcional)
-# presidio-analyzer>=2.2.0  # Microsoft Presidio para PII detection
-# presidio-anonymizer>=2.2.0
+# === CODE QUALITY ===
+black>=23.9.0
+flake8>=6.1.0
+isort>=5.12.0
 
-# Criptografia avançada para dados sensíveis
+# === UTILITIES ===
+tqdm>=4.66.0
+colorama>=0.4.6
+rich>=13.6.0
+typer>=0.9.0
+
+# === JUPYTER SUPPORT ===
+jupyter>=1.0.0
+notebook>=7.0.0
+ipywidgets>=8.1.0
+
+# === ADDITIONAL PRIVACY TOOLS (v1.4.0) ===
+# Opcionais para detecção avançada
+faker>=20.0.0
+scrubadub>=2.0.1
 cryptography>=41.0.0
+hashlib-compat>=1.0.1
 
-# Hashing e utilitários de segurança
-hashlib2>=1.0.0  # Algoritmos de hash adicionais 
+# === WEB FRAMEWORK EXTRAS ===
+jinja2>=3.1.0
+starlette>=0.27.0
+websockets>=12.0
+
+# === ASYNC SUPPORT ===
+aiohttp>=3.9.0
+asyncio-mqtt>=0.13.0
+
+# === DATA VALIDATION ===
+cerberus>=1.3.4
+marshmallow>=3.20.0
+
+# === CACHING ===
+redis>=5.0.0
+diskcache>=5.6.0
+
+# === LOGGING ===
+structlog>=23.2.0
+python-json-logger>=2.0.0
+
+# === CONFIGURATION ===
+pyyaml>=6.0.1
+configparser>=6.0.0
+toml>=0.10.2
+
+# === DEVELOPMENT TOOLS ===
+pre-commit>=3.5.0
+mypy>=1.6.0
+pylint>=3.0.0
+
+# === OPTIONAL INTEGRATIONS ===
+# Descomente conforme necessário:
+# docker>=6.1.0
+# kubernetes>=28.1.0
+# elasticsearch>=8.10.0
+# minio>=7.2.0 
