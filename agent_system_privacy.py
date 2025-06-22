@@ -27,10 +27,11 @@ class PrivacyAwareAgent(Agent):
         super().__init__(agent_id, name, description, system_prompt, model_name)
         
         # Configurações de privacidade
-        self.privacy_level = privacy_level  # standard, high, maximum
+        self.privacy_level = privacy_level  # standard, high, maximum, detection_only
         self.data_retention_policy = self._get_retention_policy(privacy_level)
         self.auto_anonymize = privacy_level in ["high", "maximum"]
         self.require_consent = privacy_level == "maximum"
+        self.detection_only = privacy_level == "detection_only"  # Novo modo
         
         # Estatísticas de privacidade
         self.privacy_stats = {
@@ -43,9 +44,10 @@ class PrivacyAwareAgent(Agent):
     def _get_retention_policy(self, privacy_level: str) -> RetentionPolicy:
         """Define política de retenção baseada no nível de privacidade"""
         policies = {
-            "standard": RetentionPolicy.MEDIUM_TERM,  # 6 meses
-            "high": RetentionPolicy.SHORT_TERM,       # 30 dias
-            "maximum": RetentionPolicy.SHORT_TERM     # 30 dias + auto-delete
+            "standard": RetentionPolicy.MEDIUM_TERM,    # 6 meses
+            "high": RetentionPolicy.SHORT_TERM,         # 30 dias
+            "maximum": RetentionPolicy.SHORT_TERM,      # 30 dias + auto-delete
+            "detection_only": RetentionPolicy.SHORT_TERM # 30 dias - apenas detecção
         }
         return policies.get(privacy_level, RetentionPolicy.MEDIUM_TERM)
     
@@ -204,6 +206,109 @@ class PrivacyAwareAgent(Agent):
                 'data_record_id': data_record.id
             }
     
+    def detect_document_data_only(self, content: str, filename: str) -> Dict[str, Any]:
+        """Detecta dados pessoais SEM anonimizar - mantém conteúdo original"""
+        
+        if not self.detection_only:
+            return {
+                'success': False,
+                'error': 'Agent not configured for detection-only mode',
+                'current_mode': self.privacy_level
+            }
+        
+        # Usa o método de detecção apenas
+        detection_result = privacy_manager.detect_personal_data_only(content, detailed=True)
+        
+        # Cria registro de detecção
+        record_info = privacy_manager.create_detection_only_record(
+            content=content,
+            agent_id=self.agent_id,
+            purpose=f"Detection analysis of {filename}"
+        )
+        
+        # Atualiza estatísticas
+        self.privacy_stats['documents_processed'] += 1
+        
+        return {
+            'success': True,
+            'filename': filename,
+            'detection_result': detection_result,
+            'record_id': record_info['record_id'],
+            'original_content_preserved': True,
+            'privacy_info': {
+                'mode': 'detection_only',
+                'anonymization_applied': False,
+                'data_category': detection_result['data_category'],
+                'detected_types': detection_result['detected_types'],
+                'total_occurrences': detection_result['total_occurrences']
+            }
+        }
+    
+    def analyze_privacy_risks(self, content: str) -> Dict[str, Any]:
+        """Analisa riscos de privacidade sem modificar o conteúdo"""
+        
+        risk_analysis = privacy_manager.analyze_document_privacy_risks(content)
+        
+        # Log da análise
+        privacy_manager.privacy_compliance.log_processing_activity(
+            operation="RISK_ANALYSIS",
+            data_id=f"analysis_{self.agent_id}",
+            purpose="Privacy risk assessment",
+            details={
+                'agent_id': self.agent_id,
+                'risk_level': risk_analysis['risk_level'],
+                'risk_score': risk_analysis['risk_score'],
+                'detected_types': risk_analysis['detection_summary']['detected_types']
+            }
+        )
+        
+        return risk_analysis
+    
+    def query_with_detection_only(self, query: str) -> Dict[str, Any]:
+        """Executa query detectando dados pessoais mas sem anonimizar"""
+        
+        if not self.detection_only:
+            return {
+                'success': False,
+                'error': 'Agent not configured for detection-only mode'
+            }
+        
+        # Detecta dados na query
+        detection_result = privacy_manager.detect_personal_data_only(query, detailed=True)
+        
+        # Cria registro da query original
+        record_info = privacy_manager.create_detection_only_record(
+            content=query,
+            agent_id=self.agent_id,
+            purpose="Query analysis with detection"
+        )
+        
+        # Executa query com conteúdo original
+        try:
+            response = self.query(query)  # Usa query original, sem anonimização
+            
+            return {
+                'success': True,
+                'response': response,
+                'query_detection': detection_result,
+                'record_id': record_info['record_id'],
+                'privacy_info': {
+                    'mode': 'detection_only',
+                    'original_query_preserved': True,
+                    'detected_data': detection_result['detected_types'],
+                    'anonymization_applied': False
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao executar query em modo detecção: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query_detection': detection_result,
+                'record_id': record_info['record_id']
+            }
+
     def get_privacy_report(self) -> Dict[str, Any]:
         """Gera relatório de privacidade do agente"""
         
@@ -227,6 +332,7 @@ class PrivacyAwareAgent(Agent):
             'agent_id': self.agent_id,
             'agent_name': self.name,
             'privacy_level': self.privacy_level,
+            'detection_only_mode': self.detection_only,
             'retention_policy': self.data_retention_policy.name,
             'stats': self.privacy_stats,
             'data_records': {

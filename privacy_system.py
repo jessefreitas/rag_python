@@ -243,6 +243,7 @@ class DataLifecycleManager:
     def __init__(self):
         self.privacy_compliance = PrivacyCompliance()
         self.data_records: Dict[str, DataRecord] = {}
+        self.detection_only_mode = False  # Novo modo apenas detecção
     
     def create_data_record(self, content: str, agent_id: str, 
                           purpose: str, user_consent: bool = False,
@@ -391,6 +392,171 @@ class DataLifecycleManager:
             'expired_records': len([r for r in records if r.is_expired]),
             'anonymized_records': len([r for r in records if r.anonymized_at is not None])
         }
+    
+    def detect_personal_data_only(self, content: str, detailed: bool = True) -> Dict[str, Any]:
+        """Detecta dados pessoais SEM anonimizar - apenas identificação"""
+        
+        detected_data = self.privacy_compliance.detect_personal_data(content)
+        data_category = self.privacy_compliance.classify_data_sensitivity(content)
+        
+        result = {
+            'has_personal_data': bool(detected_data),
+            'data_category': data_category.value,
+            'detected_types': list(detected_data.keys()),
+            'total_occurrences': sum(len(values) for values in detected_data.values())
+        }
+        
+        if detailed:
+            # Adiciona detalhes específicos por tipo
+            result['details'] = {}
+            for data_type, values in detected_data.items():
+                result['details'][data_type] = {
+                    'count': len(values),
+                    'examples': values[:3] if len(values) > 3 else values,  # Máximo 3 exemplos
+                    'positions': []
+                }
+                
+                # Encontra posições no texto (opcional)
+                for value in values:
+                    positions = []
+                    start = 0
+                    while True:
+                        pos = content.find(value, start)
+                        if pos == -1:
+                            break
+                        positions.append({'start': pos, 'end': pos + len(value)})
+                        start = pos + 1
+                    result['details'][data_type]['positions'].extend(positions)
+        
+        return result
+    
+    def create_detection_only_record(self, content: str, agent_id: str, 
+                                   purpose: str = "Data detection analysis") -> Dict[str, Any]:
+        """Cria registro apenas para detecção, sem anonimização"""
+        
+        # Detecta dados
+        detection_result = self.detect_personal_data_only(content, detailed=True)
+        
+        # Cria registro marcado como detection-only
+        record = DataRecord(
+            content=content,  # Mantém conteúdo original
+            category=DataCategory[detection_result['data_category'].upper()],
+            retention_policy=RetentionPolicy.SHORT_TERM,  # Retenção curta para análises
+            agent_id=agent_id,
+            user_consent=True,  # Implícito para detecção apenas
+            processing_purpose=f"{purpose} (detection only)"
+        )
+        
+        self.data_records[record.id] = record
+        
+        # Log da atividade
+        self.privacy_compliance.log_processing_activity(
+            operation="DETECT_ONLY",
+            data_id=record.id,
+            purpose=purpose,
+            user_consent=True,
+            details={
+                'detection_mode': True,
+                'anonymization_applied': False,
+                'detected_types': detection_result['detected_types'],
+                'total_occurrences': detection_result['total_occurrences'],
+                'agent_id': agent_id
+            }
+        )
+        
+        return {
+            'record_id': record.id,
+            'detection_result': detection_result,
+            'original_content_preserved': True,
+            'created_at': record.created_at.isoformat()
+        }
+    
+    def set_detection_only_mode(self, enabled: bool = True):
+        """Ativa/desativa modo global de detecção apenas"""
+        self.detection_only_mode = enabled
+        logger.info(f"Modo detecção apenas: {'ATIVADO' if enabled else 'DESATIVADO'}")
+    
+    def analyze_document_privacy_risks(self, content: str) -> Dict[str, Any]:
+        """Analisa riscos de privacidade de um documento sem modificá-lo"""
+        
+        detection = self.detect_personal_data_only(content, detailed=True)
+        
+        # Calcula score de risco
+        risk_scores = {
+            'cpf': 10,
+            'cnpj': 8,
+            'email': 6,
+            'phone': 7,
+            'rg': 9,
+            'cep': 4,
+            'nome_proprio': 5
+        }
+        
+        total_risk = 0
+        for data_type, details in detection.get('details', {}).items():
+            type_risk = risk_scores.get(data_type, 3)
+            total_risk += type_risk * details['count']
+        
+        # Classifica risco
+        if total_risk == 0:
+            risk_level = "BAIXO"
+            risk_description = "Nenhum dado pessoal detectado"
+        elif total_risk <= 10:
+            risk_level = "BAIXO"
+            risk_description = "Poucos dados pessoais de baixo risco"
+        elif total_risk <= 30:
+            risk_level = "MÉDIO"
+            risk_description = "Dados pessoais presentes, requer atenção"
+        elif total_risk <= 60:
+            risk_level = "ALTO"
+            risk_description = "Muitos dados pessoais, alto risco LGPD"
+        else:
+            risk_level = "CRÍTICO"
+            risk_description = "Dados altamente sensíveis, compliance obrigatório"
+        
+        return {
+            'risk_level': risk_level,
+            'risk_score': total_risk,
+            'risk_description': risk_description,
+            'detection_summary': detection,
+            'recommendations': self._get_privacy_recommendations(detection, risk_level),
+            'lgpd_compliance_required': risk_level in ["ALTO", "CRÍTICO"]
+        }
+    
+    def _get_privacy_recommendations(self, detection: Dict[str, Any], risk_level: str) -> List[str]:
+        """Gera recomendações baseadas na detecção"""
+        recommendations = []
+        
+        if not detection['has_personal_data']:
+            recommendations.append("✅ Documento seguro - nenhum dado pessoal detectado")
+            return recommendations
+        
+        detected_types = detection['detected_types']
+        
+        if 'cpf' in detected_types:
+            recommendations.append("🔒 CPF detectado - considere anonimização ou mascaramento")
+        
+        if 'cnpj' in detected_types:
+            recommendations.append("🏢 CNPJ detectado - verifique se é necessário para o processamento")
+        
+        if 'email' in detected_types:
+            recommendations.append("📧 E-mail detectado - implemente controles de acesso")
+        
+        if 'phone' in detected_types:
+            recommendations.append("📱 Telefone detectado - considere mascaramento parcial")
+        
+        if 'rg' in detected_types:
+            recommendations.append("🆔 RG detectado - dados sensíveis, anonimização recomendada")
+        
+        if risk_level in ["ALTO", "CRÍTICO"]:
+            recommendations.extend([
+                "⚠️ Implementar controles de acesso rigorosos",
+                "📋 Documentar finalidade do processamento",
+                "🔄 Estabelecer política de retenção",
+                "👤 Obter consentimento explícito quando necessário"
+            ])
+        
+        return recommendations
 
 # Instância global
 privacy_manager = DataLifecycleManager() 
