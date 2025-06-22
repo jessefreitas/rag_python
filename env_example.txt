@@ -1,0 +1,37 @@
+# ===== CONFIGURAÇÃO MULTI-LLM =====
+# Configure as chaves de API dos provedores que deseja usar
+
+# OpenAI (obrigatório para funcionalidade básica)
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# OpenRouter (acesso a múltiplos modelos via API unificada)
+OPENROUTER_API_KEY=sk-or-your-openrouter-key-here
+
+# Google Gemini (modelos Google)
+GOOGLE_GEMINI_API_KEY=your-gemini-api-key-here
+
+# DeepSeek (modelos chineses avançados)
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key-here
+
+# ===== BANCO DE DADOS =====
+# PostgreSQL para armazenamento de agentes e dados
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=rag_db
+DB_USER=postgres
+DB_PASSWORD=your-password
+
+# ===== RAGFLOW INTEGRATION =====
+# RAGFlow API para processamento avançado
+RAGFLOW_API_KEY=your-ragflow-api-key
+RAGFLOW_BASE_URL=http://localhost:9380
+
+# ===== CONFIGURAÇÕES OPCIONAIS =====
+# Configurações de ambiente
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+
+# Configurações de segurança
+SECRET_KEY=your-secret-key-for-jwt
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30 

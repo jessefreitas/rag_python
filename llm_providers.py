@@ -173,6 +173,44 @@ class GoogleGeminiProvider(BaseLLMProvider):
             logger.error(f"Erro ao listar modelos Google Gemini: {e}")
             return []
 
+class DeepSeekProvider(BaseLLMProvider):
+    """Provedor DeepSeek - Modelos chineses avançados"""
+    
+    def __init__(self, config: ProviderConfig):
+        super().__init__(config)
+        self.client = OpenAI(
+            base_url="https://api.deepseek.com/v1",
+            api_key=config.api_key
+        )
+    
+    def generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Gera resposta usando DeepSeek"""
+        try:
+            model = kwargs.get('model', self.config.model_name)
+            if not model or not model.strip():
+                model = self.config.model_name
+                
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=kwargs.get('temperature', self.config.temperature),
+                max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
+                stream=False
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Erro ao gerar resposta via DeepSeek: {e}")
+            raise
+    
+    def list_models(self) -> List[str]:
+        """Lista modelos disponíveis no DeepSeek"""
+        # Modelos conhecidos do DeepSeek
+        return [
+            "deepseek-chat",
+            "deepseek-coder", 
+            "deepseek-math"
+        ]
+
 class LLMProviderManager:
     """Gerenciador central para todos os provedores de IA"""
     
@@ -219,6 +257,18 @@ class LLMProviderManager:
             self.providers["gemini"] = GoogleGeminiProvider(config)
             if not self.active_provider:
                 self.active_provider = "gemini"
+        
+        # DeepSeek
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        if deepseek_key:
+            config = ProviderConfig(
+                name="deepseek",
+                api_key=deepseek_key,
+                model_name="deepseek-chat"
+            )
+            self.providers["deepseek"] = DeepSeekProvider(config)
+            if not self.active_provider:
+                self.active_provider = "deepseek"
     
     def set_active_provider(self, provider_name: str) -> bool:
         """Define o provedor ativo"""
@@ -268,6 +318,68 @@ class LLMProviderManager:
             }
         
         return info
+    
+    def compare_multi_llm(self, messages: List[Dict[str, str]], providers: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
+        """Compara respostas de múltiplos LLMs simultaneamente"""
+        if providers is None:
+            providers = self.list_available_providers()
+        
+        results = {}
+        
+        for provider_name in providers:
+            if provider_name in self.providers:
+                try:
+                    logger.info(f"Testando provedor: {provider_name}")
+                    start_time = __import__('time').time()
+                    
+                    response = self.providers[provider_name].generate_response(messages, **kwargs)
+                    
+                    end_time = __import__('time').time()
+                    
+                    results[provider_name] = {
+                        "response": response,
+                        "success": True,
+                        "duration": round(end_time - start_time, 2),
+                        "model": self.providers[provider_name].config.model_name,
+                        "provider_info": {
+                            "temperature": self.providers[provider_name].config.temperature,
+                            "max_tokens": self.providers[provider_name].config.max_tokens
+                        }
+                    }
+                except Exception as e:
+                    logger.error(f"Erro ao testar {provider_name}: {e}")
+                    results[provider_name] = {
+                        "response": None,
+                        "success": False,
+                        "error": str(e),
+                        "duration": 0,
+                        "model": self.providers[provider_name].config.model_name
+                    }
+        
+        return results
+    
+    def get_best_provider_for_task(self, task_type: str = "general") -> str:
+        """Recomenda o melhor provedor para um tipo de tarefa"""
+        recommendations = {
+            "general": ["openai", "deepseek", "openrouter", "gemini"],
+            "coding": ["deepseek", "openrouter", "openai", "gemini"],
+            "creative": ["openai", "gemini", "openrouter", "deepseek"],
+            "analysis": ["openai", "deepseek", "gemini", "openrouter"],
+            "legal": ["openai", "deepseek", "gemini", "openrouter"]
+        }
+        
+        preferred_order = recommendations.get(task_type, recommendations["general"])
+        
+        # Retorna o primeiro provedor disponível da lista preferida
+        for provider in preferred_order:
+            if provider in self.providers:
+                return provider
+        
+        # Se nenhum preferido estiver disponível, retorna qualquer um
+        if self.providers:
+            return list(self.providers.keys())[0]
+        
+        return None
 
 # Instância global do gerenciador
 llm_manager = LLMProviderManager() 
