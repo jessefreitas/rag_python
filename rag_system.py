@@ -3,311 +3,180 @@ Sistema RAG (Retrieval-Augmented Generation) em Python
 Combina busca de documentos com geração de texto usando IA
 """
 
-import os
 import logging
-from pathlib import Path
+import os
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from pathlib import Path
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.prompts import PromptTemplate
-from langchain.chains import RetrievalQA
-from langchain.memory import ConversationBufferMemory
+from langchain.schema import Document
 
 from document_loader import DocumentLoader
-from vector_store import VectorStore
+from vector_store import PGVectorStore  # Usaremos o PGVectorStore
 from llm_providers import llm_manager
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class SecurityError(Exception):
+    """Erro de segurança para violações de isolamento de agente"""
+    pass
+
 class RAGSystem:
-    """Sistema RAG principal que combina busca de documentos com geração de texto"""
-    
-    def __init__(self, 
-                 vector_db_path: str = "vector_db",
-                 model_name: str = "gpt-3.5-turbo",
-                 temperature: float = 0.7,
-                 max_tokens: int = 1000,
-                 provider: str = "openai"):
-        """
-        Inicializa o sistema RAG
+    """
+    Sistema RAG que opera com um agente específico, usando PGVector para armazenamento.
+    """
+    def __init__(self, agent_id: str):
+        if not agent_id or not isinstance(agent_id, str):
+            raise ValueError("RAGSystem requer um agent_id válido.")
         
-        Args:
-            vector_db_path: Caminho para o banco de vetores
-            model_name: Nome do modelo de IA
-            temperature: Temperatura para geração de texto
-            max_tokens: Máximo de tokens na resposta
-            provider: Provedor de IA (openai, openrouter, gemini)
-        """
-        self.vector_db_path = vector_db_path
+        self.agent_id = agent_id
+        logger.info(f"Sistema RAG inicializado para o agente: {self.agent_id}")
+        
+        # Inicializar componentes
         self.document_loader = DocumentLoader()
-        self.vector_store = VectorStore(
-            collection_name=f"agent_{Path(vector_db_path).name}",
-            persist_directory=self.vector_db_path
+        self.vector_store = PGVectorStore(agent_id=self.agent_id)
+        
+        # Configuração do text splitter
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
         )
-        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        
-        # Configurar provedor de IA
-        self.provider = provider
-        self.model_name = model_name
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        
-        # Verificar se o provedor está disponível
-        if provider not in llm_manager.list_available_providers():
-            available = llm_manager.list_available_providers()
-            if not available:
-                raise ValueError("Nenhum provedor de IA configurado. Configure OPENAI_API_KEY, OPENROUTER_API_KEY ou GOOGLE_GEMINI_API_KEY")
-            else:
-                logger.warning(f"Provedor '{provider}' não disponível. Usando '{available[0]}'")
-                self.provider = available[0]
-        
-        # Definir provedor ativo
-        llm_manager.set_active_provider(self.provider)
-        
-        # Template de prompt personalizado
-        self.prompt_template = PromptTemplate(
-            template="""Você é um assistente útil que responde perguntas baseado no contexto fornecido.
 
-Contexto:
-{context}
-
-Pergunta: {question}
-
-Instruções:
-1. Responda apenas com base no contexto fornecido
-2. Se a informação não estiver no contexto, diga que não tem essa informação
-3. Seja claro e conciso
-4. Use linguagem natural e amigável
-5. Cite as fontes quando relevante
-
-Resposta:""",
-            input_variables=["context", "question"]
-        )
+    def _validate_agent_access(self, context_docs: List[Document]) -> List[Document]:
+        """Valida que todos os documentos pertencem ao agente atual"""
+        validated_docs = []
         
-        # Inicializar chain de QA
-        self.qa_chain = self._create_qa_chain()
+        for doc in context_docs:
+            # Verificar se o documento tem metadata de agente
+            doc_agent_id = doc.metadata.get('agent_id')
+            source_verified = doc.metadata.get('source_agent_verified', False)
+            
+            if doc_agent_id != self.agent_id or not source_verified:
+                logger.error(f"🚨 VIOLAÇÃO DE SEGURANÇA: Documento de agente diferente detectado! Esperado: {self.agent_id}, Encontrado: {doc_agent_id}")
+                raise SecurityError(f"Tentativa de acesso a documento de outro agente detectada")
+            
+            validated_docs.append(doc)
         
-        logger.info(f"Sistema RAG inicializado com provedor: {self.provider}, modelo: {self.model_name}")
-    
-    def _create_qa_chain(self):
-        """Cria a chain de QA usando o provedor configurado"""
+        logger.info(f"🔒 Validação de segurança: {len(validated_docs)} documentos validados para agente {self.agent_id}")
+        return validated_docs
+
+    def add_document(self, file_path: str):
+        """Carrega, processa e armazena um documento para o agente."""
         try:
-            # Usar o gerenciador de provedores para gerar respostas
-            def llm_generate(prompt: str) -> str:
-                messages = [{"role": "user", "content": prompt}]
-                return llm_manager.generate_response(
-                    messages,
-                    model=self.model_name,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens
-                )
+            logger.info(f"🔄 RAGSystem: Iniciando processamento de {file_path} para agente {self.agent_id}")
             
-            # Criar chain customizada
-            from langchain.chains import LLMChain
-            from langchain.schema import BaseRetriever
-            
-            class CustomRetrievalQA:
-                def __init__(self, retriever, llm_chain):
-                    self.retriever = retriever
-                    self.llm_chain = llm_chain
-                
-                def __call__(self, question: str):
-                    # Buscar documentos relevantes
-                    docs = self.retriever.get_relevant_documents(question)
-                    context = "\n\n".join([doc.page_content for doc in docs])
-                    
-                    # Gerar resposta
-                    response = llm_generate(self.prompt_template.format(
-                        context=context,
-                        question=question
-                    ))
-                    
-                    return {
-                        "result": response,
-                        "source_documents": docs
-                    }
-            
-            retriever = self.vector_store.vector_store.as_retriever(search_kwargs={"k": 4})
-            return CustomRetrievalQA(retriever, None)
-            
-        except Exception as e:
-            logger.error(f"Erro ao criar chain de QA: {e}")
-            raise
-    
-    def load_documents(self, 
-                      file_paths: Optional[List[str]] = None,
-                      directory_path: Optional[str] = None,
-                      text: Optional[str] = None) -> bool:
-        """
-        Carrega documentos no sistema RAG
-        
-        Args:
-            file_paths: Lista de caminhos de arquivos
-            directory_path: Caminho do diretório
-            text: Texto direto
-            
-        Returns:
-            bool: True se documentos foram carregados com sucesso
-        """
-        try:
-            documents = []
-            
-            # Carregar de arquivos específicos
-            if file_paths:
-                for file_path in file_paths:
-                    if os.path.exists(file_path):
-                        doc = self.document_loader.load_file(file_path)
-                        if doc:
-                            documents.extend(doc)
-                            logger.info(f"Documento carregado: {file_path}")
-                    else:
-                        logger.warning(f"Arquivo não encontrado: {file_path}")
-            
-            # Carregar de diretório
-            if directory_path:
-                if os.path.exists(directory_path):
-                    docs = self.document_loader.load_directory(directory_path)
-                    documents.extend(docs)
-                    logger.info(f"Documentos carregados do diretório: {directory_path}")
-                else:
-                    logger.warning(f"Diretório não encontrado: {directory_path}")
-            
-            # Carregar texto direto
-            if text:
-                from langchain.schema import Document
-                documents.append(Document(page_content=text, metadata={"source": "text_input"}))
-                logger.info("Texto direto carregado")
-            
+            # Carrega o conteúdo do arquivo
+            documents = self.document_loader.load_document(file_path)
             if not documents:
-                logger.warning("Nenhum documento foi carregado")
-                return False
+                logger.warning(f"⚠️ RAGSystem: Nenhum conteúdo extraído de: {file_path}")
+                return
+
+            # Os documentos já vêm divididos em chunks do DocumentLoader
+            logger.info(f"📄 RAGSystem: Documento dividido em {len(documents)} chunks.")
+
+            # Gera embeddings e armazena no PGVector
+            logger.info(f"🔗 RAGSystem: Iniciando armazenamento no vector store...")
+            self.vector_store.add_documents(documents)
+            logger.info(f"✅ RAGSystem: Documento '{file_path}' adicionado com sucesso ao agente {self.agent_id}.")
+
+        except Exception as e:
+            logger.error(f"❌ RAGSystem: Erro ao adicionar documento para o agente {self.agent_id}: {e}", exc_info=True)
+            raise
+
+    def add_document_from_text(self, content: str, source: str):
+        """Processa e armazena um documento a partir de um texto e uma fonte."""
+        try:
+            # Cria um objeto Document do LangChain
+            document = Document(page_content=content, metadata={"source": source})
             
-            # Dividir documentos em chunks
-            texts = self.text_splitter.split_documents(documents)
-            logger.info(f"Documentos divididos em {len(texts)} chunks")
+            # Divide o documento em chunks
+            chunks = self.text_splitter.split_documents([document])
+            logger.info(f"Conteúdo de '{source}' dividido em {len(chunks)} chunks.")
+
+            # Gera embeddings e armazena no PGVector
+            self.vector_store.add_documents(chunks)
+            logger.info(f"Conteúdo de '{source}' adicionado com sucesso ao agente {self.agent_id}.")
+
+        except Exception as e:
+            logger.error(f"Erro ao adicionar conteúdo de texto para o agente {self.agent_id}: {e}", exc_info=True)
+            raise
+
+    def get_relevant_context(self, query: str, k: int = 5) -> str:
+        """Busca contexto relevante APENAS da base do agente atual."""
+        try:
+            logger.info(f"🔍 RAGSystem: Buscando contexto para agente {self.agent_id}")
             
-            # Adicionar ao vector store
-            self.vector_store.add_documents(texts)
-            logger.info("Documentos adicionados ao vector store")
+            # Buscar documentos similares (já filtrados por agent_id no PGVectorStore)
+            similar_docs = self.vector_store.similarity_search(query, k=k)
             
-            return True
+            # Validação adicional de segurança
+            validated_docs = self._validate_agent_access(similar_docs)
+            
+            if not validated_docs:
+                logger.warning(f"⚠️ RAGSystem: Nenhum contexto encontrado para agente {self.agent_id}")
+                return ""
+            
+            # Combinar o conteúdo dos documentos
+            context = "\n\n".join([doc.page_content for doc in validated_docs])
+            logger.info(f"✅ RAGSystem: Contexto recuperado com {len(validated_docs)} chunks para agente {self.agent_id}")
+            
+            return context
             
         except Exception as e:
-            logger.error(f"Erro ao carregar documentos: {e}")
-            return False
-    
-    def query(self, question: str) -> Dict[str, Any]:
-        """
-        Faz uma pergunta ao sistema RAG
-        
-        Args:
-            question: Pergunta a ser respondida
-            
-        Returns:
-            Dict com resposta e documentos fonte
-        """
+            logger.error(f"Erro ao buscar contexto para o agente {self.agent_id}: {e}")
+            return ""
+
+    def get_response(self, user_message: str, history: List[Dict[str, str]], system_prompt: str = "", temperature: float = 0.7, model: str = "gpt-4o-mini") -> str:
+        """Gera uma resposta usando RAG ISOLADO para o agente."""
         try:
-            if not self.qa_chain:
-                raise ValueError("Chain de QA não inicializada")
+            # Buscar contexto relevante da base do agente
+            context = self.get_relevant_context(user_message)
             
-            result = self.qa_chain(question)
+            # Construir prompt com contexto
+            if context:
+                enhanced_prompt = f"{system_prompt}\n\nContexto relevante:\n{context}\n\nPergunta do usuário: {user_message}"
+            else:
+                enhanced_prompt = f"{system_prompt}\n\nPergunta do usuário: {user_message}"
             
-            return {
-                "answer": result["result"],
-                "sources": [doc.metadata.get("source", "Unknown") for doc in result["source_documents"]],
-                "documents": result["source_documents"]
-            }
+            # Gerar resposta usando o LLM
+            llm = llm_manager.get_llm_instance(model=model, temperature=temperature)
+            response = llm.invoke(enhanced_prompt)
+            
+            return response.content if hasattr(response, 'content') else str(response)
             
         except Exception as e:
-            logger.error(f"Erro ao processar pergunta: {e}")
-            return {
-                "answer": f"Erro ao processar sua pergunta: {str(e)}",
-                "sources": [],
-                "documents": []
-            }
-    
-    def search_similar_documents(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
-        """
-        Busca documentos similares
+            logger.error(f"Erro ao gerar resposta para o agente {self.agent_id}: {e}")
+            return "Desculpe, ocorreu um erro ao processar sua solicitação."
+
+    def get_multi_response(self, user_message: str, context: str, history: List[Dict[str, str]], system_prompt: str, temperature: float, providers: List[str]) -> Dict[str, Any]:
+        """Gera respostas de múltiplos LLMs usando o contexto RAG ISOLADO."""
+        responses = {}
         
-        Args:
-            query: Consulta de busca
-            k: Número de resultados
-            
-        Returns:
-            Lista de documentos similares
-        """
-        try:
-            docs = self.vector_store.vector_store.similarity_search(query, k=k)
-            
-            results = []
-            for doc in docs:
-                results.append({
-                    "content": doc.page_content,
-                    "metadata": doc.metadata,
-                    "score": 0.0  # ChromaDB não retorna scores por padrão
-                })
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Erro na busca de documentos: {e}")
-            return []
-    
-    def get_system_info(self) -> Dict[str, Any]:
-        """Retorna informações sobre o sistema"""
-        return {
-            "provider": self.provider,
-            "model_name": self.model_name,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "vector_db_path": self.vector_db_path,
-            "available_providers": llm_manager.list_available_providers(),
-            "provider_info": llm_manager.get_provider_info()
-        }
-    
-    def update_model_settings(self, 
-                            model_name: Optional[str] = None,
-                            temperature: Optional[float] = None,
-                            max_tokens: Optional[int] = None,
-                            provider: Optional[str] = None) -> bool:
-        """
-        Atualiza configurações do modelo
-        
-        Args:
-            model_name: Novo nome do modelo
-            temperature: Nova temperatura
-            max_tokens: Novo máximo de tokens
-            provider: Novo provedor
-            
-        Returns:
-            bool: True se atualizado com sucesso
-        """
-        try:
-            if provider and provider != self.provider:
-                if provider in llm_manager.list_available_providers():
-                    self.provider = provider
-                    llm_manager.set_active_provider(provider)
+        for provider in providers:
+            try:
+                if context:
+                    enhanced_prompt = f"{system_prompt}\n\nContexto relevante:\n{context}\n\nPergunta do usuário: {user_message}"
                 else:
-                    logger.error(f"Provedor '{provider}' não disponível")
-                    return False
-            
-            if model_name:
-                self.model_name = model_name
-            if temperature is not None:
-                self.temperature = temperature
-            if max_tokens:
-                self.max_tokens = max_tokens
-            
-            # Recriar chain com novas configurações
-            self.qa_chain = self._create_qa_chain()
-            
-            logger.info("Configurações do modelo atualizadas")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erro ao atualizar configurações: {str(e)}")
-            return False 
+                    enhanced_prompt = f"{system_prompt}\n\nPergunta do usuário: {user_message}"
+                
+                llm = llm_manager.get_llm_instance(provider=provider, temperature=temperature)
+                response = llm.invoke(enhanced_prompt)
+                
+                responses[provider] = {
+                    'content': response.content if hasattr(response, 'content') else str(response),
+                    'model': llm_manager.get_model_name(provider),
+                    'usage': {}
+                }
+                
+            except Exception as e:
+                logger.error(f"Erro ao gerar resposta com {provider} para agente {self.agent_id}: {e}")
+                responses[provider] = {
+                    'content': f"Erro ao processar com {provider}: {str(e)}",
+                    'model': 'N/A',
+                    'usage': {}
+                }
+        
+        return responses 

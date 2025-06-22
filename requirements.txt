@@ -79,4 +79,16 @@ datasets>=2.14.0
 
 # Adicionado para conexão com PostgreSQL e gerenciamento de .env
 psycopg2-binary
-python-dotenv 
+python-dotenv
+
+# Adicionado para conexão com PostgreSQL e gerenciamento de .env
+pgvector
+
+# Adicionado para conexão com PostgreSQL e gerenciamento de .env
+chromadb
+
+# Adicionado para conexão com PostgreSQL e gerenciamento de .env
+beautifulsoup4
+
+# Adicionado para conexão com PostgreSQL e gerenciamento de .env
+playwright 

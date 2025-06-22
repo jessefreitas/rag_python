@@ -84,6 +84,18 @@ rag_python/
 4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
 
+## 📚 Documentação
+
+- [Configuração de Provedores LLM](PROVIDERS_SETUP.md)
+- [Sistema Multi-LLM](MULTI_LLM_FEATURE.md)
+- [Sistema de Agentes](README_AGENTS.md)
+- [Sistema Integrado](README_INTEGRATED.md)
+- [Sistema Web](README_WEB_SYSTEM.md)
+- [Fluxo de Documentos](FLUXO_DOCUMENTOS.md)
+- [🔒 Isolamento de Segurança](SECURITY_ISOLATION.md)
+- [🔧 Solução de Problemas](TROUBLESHOOTING.md)
+- [📋 Log de Implementação](IMPLEMENTATION_LOG.md)
+
 ## 📝 Licença
 
 Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.

@@ -11,9 +11,22 @@ import chromadb
 from chromadb.config import Settings
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
+import psycopg2
+from langchain.schema import Document
+from pgvector.psycopg2 import register_vector
+from llm_providers import llm_manager
+from database import Database
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# O modelo de embedding a ser usado. Certifique-se que o provider está configurado.
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_DIMENSIONS = 1536  # Dimensões para text-embedding-3-small
+
+class SecurityError(Exception):
+    """Erro de segurança para violações de isolamento de agente"""
+    pass
 
 class VectorStore:
     """Classe para gerenciar o banco de vetores usando ChromaDB"""
@@ -253,4 +266,165 @@ class VectorStore:
             
         except Exception as e:
             logger.error(f"Erro ao obter fontes de documentos: {str(e)}")
-            return [] 
+            return []
+
+class PGVectorStore:
+    """
+    Gerencia o armazenamento e a busca de vetores no PostgreSQL/Supabase
+    usando a extensão pgvector, de forma específica para cada agente.
+    """
+    def __init__(self, agent_id: str):
+        if not agent_id:
+            raise ValueError("PGVectorStore requer um agent_id.")
+        self.agent_id = agent_id
+        self.embedding_function = self._get_embedding_function()
+
+    def _get_embedding_function(self):
+        """Retorna a função de embedding usando OpenAI diretamente."""
+        def embed_texts(texts: List[str]) -> List[List[float]]:
+            try:
+                from openai import OpenAI
+                client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                
+                embeddings = []
+                for text in texts:
+                    response = client.embeddings.create(
+                        model=EMBEDDING_MODEL,
+                        input=text
+                    )
+                    embeddings.append(response.data[0].embedding)
+                
+                return embeddings
+            except Exception as e:
+                logger.error(f"Erro ao gerar embeddings: {e}")
+                raise
+
+        return embed_texts
+
+    def _execute_query(self, query: str, params: tuple = (), fetch: str = None):
+        """Executa uma query no banco de dados."""
+        conn = None
+        try:
+            conn = Database.get_connection()
+            register_vector(conn)
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                if fetch == 'one':
+                    return cur.fetchone()
+                if fetch == 'all':
+                    return cur.fetchall()
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Erro na query ao banco de dados: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                Database.release_connection(conn)
+
+    def add_documents(self, documents: List[Document]):
+        """Gera embeddings para os documentos e os salva no banco de dados."""
+        logger.info(f"🔗 PGVectorStore: Iniciando adição de {len(documents)} documentos para agente {self.agent_id}")
+        
+        texts = [doc.page_content for doc in documents]
+        logger.info(f"📝 PGVectorStore: Extraídos {len(texts)} textos dos documentos")
+        
+        logger.info(f"🧠 PGVectorStore: Gerando embeddings para {len(texts)} textos...")
+        embeddings = self.embedding_function(texts)
+        logger.info(f"✅ PGVectorStore: Embeddings gerados com sucesso ({len(embeddings)} embeddings)")
+
+        # Usando a nova estrutura de tabelas
+        # Primeiro, precisamos criar um 'document' mestre para estes chunks
+        source = documents[0].metadata.get('source', 'desconhecido')
+        logger.info(f"📂 PGVectorStore: Fonte do documento: {source}")
+        
+        # Usar uma única transação para garantir consistência
+        conn = None
+        try:
+            conn = Database.get_connection()
+            register_vector(conn)
+            
+            with conn.cursor() as cur:
+                # Insere um novo documento na tabela 'documents' para obter um ID
+                logger.info(f"💾 PGVectorStore: Inserindo documento mestre na tabela 'documents'...")
+                doc_query = "INSERT INTO documents (agent_id, file_name, source_type) VALUES (%s, %s, %s) RETURNING id"
+                cur.execute(doc_query, (self.agent_id, source, 'file'))
+                document_id = cur.fetchone()[0]
+                logger.info(f"✅ PGVectorStore: Documento mestre criado com ID: {document_id}")
+
+                # Agora, insere cada chunk associado a esse novo document_id
+                logger.info(f"📄 PGVectorStore: Inserindo {len(texts)} chunks na tabela 'document_chunks'...")
+                chunk_query = "INSERT INTO document_chunks (document_id, agent_id, chunk_text, embedding) VALUES (%s, %s, %s, %s)"
+                for i, text_chunk in enumerate(texts):
+                    logger.info(f"  - Inserindo chunk {i+1}/{len(texts)} (tamanho: {len(text_chunk)} chars)")
+                    cur.execute(chunk_query, (document_id, self.agent_id, text_chunk, embeddings[i]))
+                
+                # Commit da transação
+                conn.commit()
+                logger.info(f"🎉 PGVectorStore: {len(documents)} chunks salvos no banco de dados para o agente {self.agent_id}")
+                
+        except Exception as e:
+            logger.error(f"❌ PGVectorStore: Erro ao adicionar documentos: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                Database.release_connection(conn)
+
+    def similarity_search(self, query: str, k: int = 5) -> List[Document]:
+        """Busca por documentos similares a uma query APENAS do agente atual."""
+        # Validação de segurança: garantir que agent_id não seja nulo/vazio
+        if not self.agent_id or not isinstance(self.agent_id, str):
+            raise ValueError(f"Agent ID inválido para busca: {self.agent_id}")
+            
+        logger.info(f"🔍 PGVectorStore: Iniciando busca por similaridade para agente {self.agent_id}")
+        
+        query_embedding = self.embedding_function([query])[0]
+        logger.info(f"🧠 PGVectorStore: Embedding da query gerado ({len(query_embedding)} dimensões)")
+
+        # Usar uma conexão dedicada para a busca
+        conn = None
+        try:
+            conn = Database.get_connection()
+            register_vector(conn)
+            
+            with conn.cursor() as cur:
+                # ISOLAMENTO GARANTIDO: Busca APENAS chunks do agente específico
+                # Usamos tanto WHERE agent_id = %s quanto validação dupla
+                db_query = """
+                    SELECT chunk_text, (embedding <=> %s::vector) AS distance, agent_id
+                    FROM document_chunks
+                    WHERE agent_id = %s
+                    ORDER BY distance
+                    LIMIT %s
+                """
+                
+                logger.info(f"📊 PGVectorStore: Executando busca ISOLADA por {k} chunks do agente {self.agent_id}...")
+                cur.execute(db_query, (query_embedding, self.agent_id, k))
+                results = cur.fetchall()
+                
+                # Validação adicional de segurança: verificar se todos os resultados são do agente correto
+                for row in results:
+                    if row[2] != self.agent_id:  # row[2] é o agent_id retornado
+                        logger.error(f"🚨 VIOLAÇÃO DE SEGURANÇA: Chunk de agente diferente detectado! Esperado: {self.agent_id}, Encontrado: {row[2]}")
+                        raise SecurityError(f"Violação de isolamento de agente detectada")
+                
+                logger.info(f"✅ PGVectorStore: Encontrados {len(results)} chunks similares (APENAS do agente {self.agent_id})")
+                
+                return [Document(
+                    page_content=row[0], 
+                    metadata={
+                        'distance': float(row[1]),
+                        'agent_id': row[2],  # Para auditoria
+                        'source_agent_verified': row[2] == self.agent_id
+                    }
+                ) for row in results]
+                
+        except Exception as e:
+            logger.error(f"❌ PGVectorStore: Erro na busca por similaridade: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                Database.release_connection(conn) 

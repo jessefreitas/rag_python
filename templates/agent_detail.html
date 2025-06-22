@@ -3,732 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ agent.name }} - Detalhes do Agente</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <title>Agente {{ agent.name }} - Sistema RAG</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .upload-area {
-            border: 2px dashed #dee2e6;
-            border-radius: 8px;
-            padding: 2rem;
-            text-align: center;
-            transition: border-color 0.3s;
-            background-color: #f8f9fa;
-        }
-        .upload-area:hover, .upload-area.dragover {
-            border-color: #007bff;
-            background-color: #e3f2fd;
-        }
-        .file-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            margin-bottom: 0.5rem;
-            background-color: white;
-        }
-        .file-item:hover {
-            background-color: #f8f9fa;
-        }
-        .chat-container {
-            height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            background-color: #f8f9fa;
-        }
-        .message {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 8px;
-        }
-        .user-message {
-            background-color: #007bff;
-            color: white;
-            margin-left: 20%;
-        }
-        .agent-message {
-            background-color: #e9ecef;
-            color: #333;
-            margin-right: 20%;
-        }
-        .multi-llm-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        .llm-response {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            background-color: white;
-        }
-        .llm-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .provider-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .provider-openai { background-color: #10a37f; color: white; }
-        .provider-openrouter { background-color: #ff6b35; color: white; }
-        .provider-gemini { background-color: #4285f4; color: white; }
-        .provider-anthropic { background-color: #ff6b6b; color: white; }
-        .comparison-stats {
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 14px;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
-        .feedback-buttons {
-            margin-top: 10px;
-        }
-        .feedback-btn {
-            margin-right: 10px;
-            padding: 5px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .feedback-good {
-            background-color: #28a745;
-            color: white;
-        }
-        .feedback-bad {
-            background-color: #dc3545;
-            color: white;
-        }
-        .stats-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .stats-number {
-            font-size: 2rem;
-            font-weight: bold;
-        }
-        .multi-llm-toggle {
-            margin-bottom: 15px;
-        }
-        .provider-selector {
-            margin-bottom: 15px;
-        }
-        .provider-checkbox {
-            margin-right: 15px;
-        }
+        body { background-color: #f8f9fa; }
+        .card-header { font-weight: 500; }
+        #chat-window { height: 65vh; }
+        .msg_cotainer { max-width: 85%; background-color: #e9ecef; border-radius: 15px; padding: 10px; position: relative; }
+        .msg_cotainer_send { max-width: 85%; background-color: #0d6efd; color: white; border-radius: 15px; padding: 10px; position: relative; }
+        .feedback-btn { border-radius: 50%; width: 35px; height: 35px; padding: 0; line-height: 1; font-size: 1.2rem; }
+        .msg_cotainer .card { border: none; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="/">
-                <i class="fas fa-robot me-2"></i>Sistema de Agentes RAG
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">
-                    <i class="fas fa-home me-1"></i>Dashboard
-                </a>
-                <a class="nav-link" href="/agents">
-                    <i class="fas fa-cogs me-1"></i>Agentes
-                </a>
-            </div>
+    <header class="bg-dark text-white text-center py-3 shadow-sm">
+        <div class="container d-flex justify-content-between align-items-center">
+            <h1 class="h3 mb-0"><a href="/agents" class="text-white text-decoration-none">Sistema de Agentes</a></h1>
+            <a href="/agents" class="btn btn-outline-light">Voltar</a>
         </div>
-    </nav>
+    </header>
 
-    <div class="container mt-4">
+    <main class="container mt-4">
         <div class="row">
-            <div class="col-12">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="/agents">Agentes</a></li>
-                        <li class="breadcrumb-item active">{{ agent.name }}</li>
-                    </ol>
-                </nav>
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">Chat com {{ agent.name }}</h4>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="compareLLMsToggle">
+                            <label class="form-check-label" for="compareLLMsToggle">Comparar LLMs</label>
+                        </div>
+                    </div>
+                    <div id="chat-window" class="card-body p-4" style="overflow-y: auto;">
+                        <div class="text-center text-muted p-5" id="start-message">
+                            <p class="lead">Comece a conversa</p>
+                            <p>Faça uma pergunta ou envie uma mensagem para o agente.</p>
+                        </div>
+                    </div>
+                    <div class="card-footer p-3">
+                        <div id="provider-selection" class="mb-2" style="display: none;">
+                            <label class="form-label small">Selecione os provedores para comparar:</label>
+                            <div>
+                                {% for provider in providers %}
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input provider-checkbox" type="checkbox" id="provider-{{provider}}" value="{{provider}}" checked>
+                                    <label class="form-check-label" for="provider-{{provider}}">{{ provider }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="user-message" class="form-control" placeholder="Digite sua mensagem...">
+                            <button id="send-button" class="btn btn-primary">Enviar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header"><h5 class="mb-0">Informações</h5></div>
+                    <div class="card-body">
+                        <p><strong>Descrição:</strong> {{ agent.description }}</p>
+                        <p><strong>Modelo:</strong> <span class="badge bg-secondary">{{ agent.model }}</span></p>
+                        <p><strong>Temperatura:</strong> {{ agent.temperature }}</p>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header"><h5 class="mb-0">Estatísticas</h5></div>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">Documentos<span class="badge bg-primary rounded-pill">{{ stats.total_documents }}</span></li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">Respostas Boas<span class="badge bg-success rounded-pill">{{ stats.total_positive_feedback }}</span></li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">Respostas Ruins<span class="badge bg-danger rounded-pill">{{ stats.total_negative_feedback }}</span></li>
+                    </ul>
+                    {% if stats.feedback_by_llm %}
+                    <div class="card-body">
+                        <h6>Feedback por LLM:</h6>
+                        {% for provider, fb in stats.feedback_by_llm.items() %}
+                        <p class="mb-1"><strong>{{ provider }}:</strong> <span class="text-success">{{ fb.positive }}</span> | <span class="text-danger">{{ fb.negative }}</span></p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
                 
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>{{ agent.name }}</h1>
-                    <div>
-                        <button class="btn btn-outline-primary me-2" onclick="editAgent()">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="btn btn-outline-danger" onclick="deleteAgent()">
-                            <i class="fas fa-trash"></i> Deletar
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Estatísticas do Agente -->
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="stats-number" id="documentCount">-</div>
-                            <div>Documentos</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="stats-number" id="goodRatings">-</div>
-                            <div>Avaliações Positivas</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="stats-number" id="badRatings">-</div>
-                            <div>Avaliações Negativas</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <!-- Chat e Consultas -->
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5>Chat com o Agente</h5>
-                            </div>
-                            <div class="card-body">
-                                <!-- Toggle Multi-LLM -->
-                                <div class="multi-llm-toggle">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="multiLLMToggle">
-                                        <label class="form-check-label" for="multiLLMToggle">
-                                            <strong>Comparar Múltiplos LLMs</strong>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <!-- Seletor de Provedores -->
-                                <div class="provider-selector" id="providerSelector" style="display: none;">
-                                    <label class="form-label">Selecionar Provedores:</label>
-                                    <div id="providerCheckboxes">
-                                        <!-- Provedores serão carregados dinamicamente -->
-                                    </div>
-                                </div>
-
-                                <div class="chat-container" id="chatContainer">
-                                    <div class="text-center text-muted">
-                                        <i class="fas fa-comments fa-2x mb-2"></i>
-                                        <p>Inicie uma conversa com o agente</p>
-                                    </div>
-                                </div>
-
-                                <div class="loading" id="loading">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Carregando...</span>
-                                    </div>
-                                    <p class="mt-2">Processando sua pergunta...</p>
-                                </div>
-
-                                <div class="input-group mt-3">
-                                    <input type="text" class="form-control" id="questionInput" 
-                                           placeholder="Digite sua pergunta..." onkeypress="handleKeyPress(event)">
-                                    <button class="btn btn-primary" onclick="sendQuestion()">
-                                        <i class="fas fa-paper-plane"></i> Enviar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Informações do Agente -->
-                    <div class="col-md-4">
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h6>Informações do Agente</h6>
-                            </div>
-                            <div class="card-body">
-                                <p><strong>Descrição:</strong> {{ agent.description }}</p>
-                                <p><strong>Modelo:</strong> {{ agent.model_name }}</p>
-                                <p><strong>Temperatura:</strong> {{ agent.temperature }}</p>
-                                <p><strong>Criado em:</strong> {{ agent.created_at[:10] }}</p>
-                            </div>
-                        </div>
-
-                        <!-- Upload de Arquivos -->
-                        <div class="card">
-                            <div class="card-header">
-                                <h6>Upload de Arquivos</h6>
-                            </div>
-                            <div class="card-body">
-                                <form id="uploadForm" enctype="multipart/form-data">
-                                    <div class="mb-3">
-                                        <input type="file" class="form-control" id="fileInput" name="files" multiple>
-                                    </div>
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="fas fa-upload"></i> Upload
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Lista de Arquivos -->
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h6>Arquivos do Agente</h6>
-                            </div>
-                            <div class="card-body">
-                                <div id="filesList">
-                                    <!-- Arquivos serão carregados dinamicamente -->
-                                </div>
-                            </div>
-                        </div>
+                <div class="card shadow-sm">
+                    <div class="card-header"><h5 class="mb-0">Adicionar Documento</h5></div>
+                    <div class="card-body">
+                        <form id="upload-form">
+                            <div class="mb-3"><input class="form-control" type="file" id="file-input" name="file"></div>
+                            <button type="submit" class="btn btn-success w-100">Enviar Arquivo</button>
+                        </form>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
-    <!-- Modal de Edição -->
-    <div class="modal fade" id="editModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Editar Agente</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="editForm">
-                        <div class="mb-3">
-                            <label class="form-label">Nome</label>
-                            <input type="text" class="form-control" id="editName" value="{{ agent.name }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Descrição</label>
-                            <textarea class="form-control" id="editDescription" rows="3" required>{{ agent.description }}</textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">System Prompt</label>
-                            <textarea class="form-control" id="editSystemPrompt" rows="3">{{ agent.system_prompt }}</textarea>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Modelo</label>
-                                    <select class="form-control" id="editModel">
-                                        <option value="gpt-3.5-turbo" {% if agent.model_name == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo</option>
-                                        <option value="gpt-4" {% if agent.model_name == 'gpt-4' %}selected{% endif %}>GPT-4</option>
-                                        <option value="gpt-4o-mini" {% if agent.model_name == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o Mini</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Temperatura</label>
-                                    <input type="number" class="form-control" id="editTemperature" 
-                                           value="{{ agent.temperature }}" min="0" max="2" step="0.1">
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveAgent()">Salvar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const agentId = '{{ agent.id }}';
-        let currentQuestion = '';
-        let currentResponse = '';
+        document.addEventListener('DOMContentLoaded', function() {
+            const agentId = '{{ agent.id }}';
+            const chatWindow = document.getElementById('chat-window');
+            const userMessageInput = document.getElementById('user-message');
+            const sendButton = document.getElementById('send-button');
+            const compareLLMsToggle = document.getElementById('compareLLMsToggle');
+            const providerSelection = document.getElementById('provider-selection');
+            const uploadForm = document.getElementById('upload-form');
+            const startMessage = document.getElementById('start-message');
 
-        // Carregar estatísticas do agente
-        loadAgentStats();
+            const hideStartMessage = () => { if (startMessage) { startMessage.style.display = 'none'; } };
+            const appendMessage = (html) => { hideStartMessage(); chatWindow.insertAdjacentHTML('beforeend', html); chatWindow.scrollTop = chatWindow.scrollHeight; };
+            const showTypingIndicator = () => appendMessage(`<div class="d-flex justify-content-start mb-3" id="typing-indicator"><div class="msg_cotainer"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">...</span></div></div></div>`);
+            const removeTypingIndicator = () => { const el = document.getElementById('typing-indicator'); if (el) el.remove(); };
+            
+            const handleSendMessage = async () => {
+                const message = userMessageInput.value.trim();
+                if (!message) return;
 
-        // Carregar arquivos do agente
-        loadAgentFiles();
+                appendMessage(`<div class="d-flex justify-content-end mb-3"><div class="msg_cotainer_send">${message}</div></div>`);
+                userMessageInput.value = '';
+                showTypingIndicator();
 
-        // Carregar provedores disponíveis
-        loadProviders();
+                const compareLLMs = compareLLMsToggle.checked;
+                const providers = Array.from(document.querySelectorAll('.provider-checkbox:checked')).map(cb => cb.value);
 
-        // Event listeners
-        document.getElementById('multiLLMToggle').addEventListener('change', function() {
-            const providerSelector = document.getElementById('providerSelector');
-            providerSelector.style.display = this.checked ? 'block' : 'none';
-        });
+                try {
+                    const response = await fetch(`/api/v1/agents/${agentId}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message, compare_llms: compareLLMs, providers, history: [] }) // History can be built upon
+                    });
+                    const data = await response.json();
+                    removeTypingIndicator();
 
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            uploadFiles();
-        });
-
-        function loadAgentStats() {
-            fetch(`/api/v1/agents/${agentId}/stats`)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('documentCount').textContent = data.total_documents || 0;
-                    document.getElementById('goodRatings').textContent = data.good_ratings || 0;
-                    document.getElementById('badRatings').textContent = data.bad_ratings || 0;
-                })
-                .catch(error => console.error('Erro ao carregar estatísticas:', error));
-        }
-
-        function loadAgentFiles() {
-            fetch(`/api/v1/agents/${agentId}/files`)
-                .then(response => response.json())
-                .then(files => {
-                    const filesList = document.getElementById('filesList');
-                    if (files.length === 0) {
-                        filesList.innerHTML = '<p class="text-muted">Nenhum arquivo carregado</p>';
-                        return;
+                    if (compareLLMs && data.responses) {
+                        let responsesHtml = '<div class="row g-2">';
+                        data.responses.forEach(resp => {
+                            responsesHtml += `<div class="col-md-6"><div class="card h-100"><div class="card-header bg-secondary text-white small p-2">${resp.provider}</div><div class="card-body small p-2">${resp.content.replace(/\\n/g, '<br>')}</div><div class="card-footer text-center p-1"><div id="fb-${resp.id}"><button class="btn btn-sm btn-outline-success feedback-btn" data-id="${resp.id}" data-fb="1">👍</button> <button class="btn btn-sm btn-outline-danger feedback-btn" data-id="${resp.id}" data-fb="-1">👎</button></div></div></div></div>`;
+                        });
+                        responsesHtml += '</div>';
+                        appendMessage(`<div class="d-flex justify-content-start mb-3"><div class="msg_cotainer w-100">${responsesHtml}</div></div>`);
+                    } else if (data.content) {
+                        appendMessage(`<div class="d-flex justify-content-start mb-3"><div class="msg_cotainer">${data.content.replace(/\\n/g, '<br>')}<div class="text-center mt-2" id="fb-${data.id}"><button class="btn btn-sm btn-outline-success feedback-btn" data-id="${data.id}" data-fb="1">👍</button> <button class="btn btn-sm btn-outline-danger feedback-btn" data-id="${data.id}" data-fb="-1">👎</button></div></div></div>`);
                     }
 
-                    filesList.innerHTML = files.map(file => `
-                        <div class="file-item">
-                            <div>
-                                <i class="fas fa-file me-2"></i>
-                                <strong>${file.filename}</strong>
-                                <br>
-                                <small class="text-muted">
-                                    ${formatFileSize(file.size)} • ${file.created_at.substring(0, 10)}
-                                </small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${file.filename}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    `).join('');
-                })
-                .catch(error => console.error('Erro ao carregar arquivos:', error));
-        }
+                } catch (error) { removeTypingIndicator(); console.error(error); appendMessage('<div class="alert alert-danger">Erro de comunicação.</div>'); }
+            };
+            
+            sendButton.addEventListener('click', handleSendMessage);
+            userMessageInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSendMessage());
+            compareLLMsToggle.addEventListener('change', () => providerSelection.style.display = compareLLMsToggle.checked ? 'block' : 'none');
+            
+            chatWindow.addEventListener('click', async (e) => {
+                const button = e.target.closest('.feedback-btn');
+                if (!button) return;
 
-        function loadProviders() {
-            fetch('/api/v1/providers')
-                .then(response => response.json())
-                .then(data => {
-                    const checkboxesContainer = document.getElementById('providerCheckboxes');
-                    checkboxesContainer.innerHTML = '';
-                    
-                    Object.keys(data).forEach(provider => {
-                        const div = document.createElement('div');
-                        div.className = 'provider-checkbox';
-                        div.innerHTML = `
-                            <input type="checkbox" id="provider_${provider}" value="${provider}" checked>
-                            <label for="provider_${provider}">${provider.charAt(0).toUpperCase() + provider.slice(1)}</label>
-                        `;
-                        checkboxesContainer.appendChild(div);
+                const responseId = button.dataset.id;
+                const feedback = button.dataset.fb;
+                button.parentElement.innerHTML = '<span class="text-muted small">Obrigado!</span>';
+
+                try {
+                    await fetch(`/api/v1/responses/${responseId}/feedback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ feedback: parseInt(feedback) })
                     });
-                })
-                .catch(error => console.error('Erro ao carregar provedores:', error));
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendQuestion();
-            }
-        }
-
-        function sendQuestion() {
-            const questionInput = document.getElementById('questionInput');
-            const question = questionInput.value.trim();
-            
-            if (!question) return;
-
-            const useMultiLLM = document.getElementById('multiLLMToggle').checked;
-            const selectedProviders = useMultiLLM ? 
-                Array.from(document.querySelectorAll('#providerCheckboxes input:checked')).map(cb => cb.value) :
-                ['openai'];
-
-            // Adicionar mensagem do usuário
-            addMessage(question, 'user');
-            questionInput.value = '';
-            currentQuestion = question;
-
-            // Mostrar loading
-            document.getElementById('loading').style.display = 'block';
-
-            // Preparar dados da requisição
-            const requestData = {
-                question: question,
-                use_multi_llm: useMultiLLM,
-                providers: selectedProviders
-            };
-
-            fetch(`/api/v1/agents/${agentId}/query`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('loading').style.display = 'none';
-                
-                if (data.error) {
-                    addMessage('Erro: ' + data.error, 'agent');
-                    return;
-                }
-
-                if (data.multi_llm) {
-                    // Resposta multi-LLM
-                    addMultiLLMResponse(data);
-                } else {
-                    // Resposta normal
-                    addMessage(data.response, 'agent');
-                    currentResponse = data.response;
-                    addFeedbackButtons();
-                }
-            })
-            .catch(error => {
-                document.getElementById('loading').style.display = 'none';
-                console.error('Erro:', error);
-                addMessage('Erro ao processar sua pergunta', 'agent');
+                } catch (error) { console.error('Erro ao enviar feedback:', error); }
             });
-        }
 
-        function addMessage(message, type) {
-            const chatContainer = document.getElementById('chatContainer');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
-            messageDiv.textContent = message;
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function addMultiLLMResponse(data) {
-            const chatContainer = document.getElementById('chatContainer');
-            
-            // Container para todas as respostas
-            const responsesContainer = document.createElement('div');
-            responsesContainer.className = 'multi-llm-container';
-            
-            // Adicionar cada resposta
-            Object.entries(data.responses).forEach(([provider, responseData]) => {
-                const responseDiv = document.createElement('div');
-                responseDiv.className = 'llm-response';
-                
-                responseDiv.innerHTML = `
-                    <div class="llm-header">
-                        <span class="provider-badge provider-${provider}">${provider.toUpperCase()}</span>
-                        <small class="text-muted">${responseData.model}</small>
-                    </div>
-                    <div class="response-content">
-                        ${responseData.response.replace(/\n/g, '<br>')}
-                    </div>
-                    <div class="feedback-buttons">
-                        <button class="feedback-btn feedback-good" onclick="sendFeedback('good', '${provider}', '${responseData.response.replace(/'/g, "\\'")}')">
-                            <i class="fas fa-thumbs-up"></i> Bom
-                        </button>
-                        <button class="feedback-btn feedback-bad" onclick="sendFeedback('bad', '${provider}', '${responseData.response.replace(/'/g, "\\'")}')">
-                            <i class="fas fa-thumbs-down"></i> Ruim
-                        </button>
-                    </div>
-                `;
-                
-                responsesContainer.appendChild(responseDiv);
-            });
-            
-            // Adicionar estatísticas de comparação se houver
-            if (data.comparison && Object.keys(data.comparison).length > 0) {
-                const comparisonDiv = document.createElement('div');
-                comparisonDiv.className = 'comparison-stats';
-                comparisonDiv.innerHTML = `
-                    <strong>Comparação:</strong><br>
-                    Provedores usados: ${data.comparison.providers_used.join(', ')}<br>
-                    Respostas únicas: ${data.comparison.unique_responses}<br>
-                    Tamanhos das respostas: ${Object.entries(data.comparison.response_lengths).map(([p, l]) => `${p}: ${l} chars`).join(', ')}
-                `;
-                responsesContainer.appendChild(comparisonDiv);
-            }
-            
-            chatContainer.appendChild(responsesContainer);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function addFeedbackButtons() {
-            const chatContainer = document.getElementById('chatContainer');
-            const feedbackDiv = document.createElement('div');
-            feedbackDiv.className = 'feedback-buttons';
-            feedbackDiv.innerHTML = `
-                <button class="feedback-btn feedback-good" onclick="sendFeedback('good', 'single', '${currentResponse.replace(/'/g, "\\'")}')">
-                    <i class="fas fa-thumbs-up"></i> Bom
-                </button>
-                <button class="feedback-btn feedback-bad" onclick="sendFeedback('bad', 'single', '${currentResponse.replace(/'/g, "\\'")}')">
-                    <i class="fas fa-thumbs-down"></i> Ruim
-                </button>
-            `;
-            chatContainer.appendChild(feedbackDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function sendFeedback(rating, provider, response) {
-            fetch(`/api/v1/agents/${agentId}/feedback`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    user_input: currentQuestion,
-                    agent_response: response,
-                    rating: rating,
-                    provider: provider
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Atualizar estatísticas
-                    loadAgentStats();
-                    
-                    // Mostrar feedback visual
-                    const button = event.target.closest('.feedback-btn');
-                    button.style.opacity = '0.5';
-                    button.disabled = true;
-                    button.innerHTML = '<i class="fas fa-check"></i> Obrigado!';
-                }
-            })
-            .catch(error => console.error('Erro ao enviar feedback:', error));
-        }
-
-        function uploadFiles() {
-            const fileInput = document.getElementById('fileInput');
-            const files = fileInput.files;
-            
-            if (files.length === 0) {
-                alert('Selecione pelo menos um arquivo');
-                return;
-            }
-
-            const formData = new FormData();
-            for (let i = 0; i < files.length; i++) {
-                formData.append('files', files[i]);
-            }
-
-            fetch(`/api/v1/agents/${agentId}/upload`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    fileInput.value = '';
-                    loadAgentFiles();
-                    loadAgentStats();
-                } else {
-                    alert('Erro no upload: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro no upload');
-            });
-        }
-
-        function deleteFile(filename) {
-            if (!confirm(`Tem certeza que deseja deletar o arquivo "${filename}"?`)) {
-                return;
-            }
-
-            fetch(`/api/v1/agents/${agentId}/files/${encodeURIComponent(filename)}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    loadAgentFiles();
-                    loadAgentStats();
-                } else {
-                    alert('Erro ao deletar arquivo');
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro ao deletar arquivo');
-            });
-        }
-
-        function editAgent() {
-            const modal = new bootstrap.Modal(document.getElementById('editModal'));
-            modal.show();
-        }
-
-        function saveAgent() {
-            const agentData = {
-                name: document.getElementById('editName').value,
-                description: document.getElementById('editDescription').value,
-                system_prompt: document.getElementById('editSystemPrompt').value,
-                model_name: document.getElementById('editModel').value,
-                temperature: parseFloat(document.getElementById('editTemperature').value)
-            };
-
-            fetch(`/api/v1/agents/${agentId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(agentData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const file = document.getElementById('file-input').files[0];
+                if (!file) { alert('Selecione um arquivo.'); return; }
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await fetch(`/api/v1/agents/${agentId}/upload`, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    alert(result.message || 'Enviado!');
                     location.reload();
-                } else {
-                    alert('Erro ao salvar agente');
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro ao salvar agente');
+                } catch (error) { alert('Erro no upload.'); }
             });
-        }
-
-        function deleteAgent() {
-            if (!confirm('Tem certeza que deseja deletar este agente? Esta ação não pode ser desfeita.')) {
-                return;
-            }
-
-            fetch(`/api/v1/agents/${agentId}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = '/agents';
-                } else {
-                    alert('Erro ao deletar agente');
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro ao deletar agente');
-            });
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
+            
+            async function loadHistory() {
+                try {
+                    const response = await fetch(`/api/v1/agents/${agentId}/history`);
+                    const history = await response.json();
+                    if (history.length > 0) {
+                        hideStartMessage();
+                        history.forEach(item => {
+                            if (item.role === 'user') {
+                                appendMessage(`<div class="d-flex justify-content-end mb-3"><div class="msg_cotainer_send">${item.content}</div></div>`);
+                            } else if (item.role === 'assistant') {
+                                if (item.responses && item.responses.length > 1) {
+                                     let responsesHtml = '<div class="row g-2">';
+                                     item.responses.forEach(resp => {
+                                         const feedbackHtml = resp.feedback ? '<span class="text-muted small">Feedback registrado</span>' : `<button class="btn btn-sm btn-outline-success feedback-btn" data-id="${resp.id}" data-fb="1">👍</button> <button class="btn btn-sm btn-outline-danger feedback-btn" data-id="${resp.id}" data-fb="-1">👎</button>`;
+                                         responsesHtml += `<div class="col-md-6"><div class="card h-100"><div class="card-header bg-secondary text-white small p-2">${resp.provider}</div><div class="card-body small p-2">${resp.content.replace(/\\n/g, '<br>')}</div><div class="card-footer text-center p-1"><div id="fb-${resp.id}">${feedbackHtml}</div></div></div></div>`;
+                                     });
+                                     appendMessage(`<div class="d-flex justify-content-start mb-3"><div class="msg_cotainer w-100">${responsesHtml}</div></div>`);
+                                } else if (item.responses && item.responses.length === 1) {
+                                    const resp = item.responses[0];
+                                    const feedbackHtml = resp.feedback ? '<span class="text-muted small">Feedback registrado</span>' : `<button class="btn btn-sm btn-outline-success feedback-btn" data-id="${resp.id}" data-fb="1">👍</button> <button class="btn btn-sm btn-outline-danger feedback-btn" data-id="${resp.id}" data-fb="-1">👎</button>`;
+                                    appendMessage(`<div class="d-flex justify-content-start mb-3"><div class="msg_cotainer">${resp.content.replace(/\\n/g, '<br>')}<div class="text-center mt-2" id="fb-${resp.id}">${feedbackHtml}</div></div></div>`);
+                                }
+                            }
+                        });
+                    }
+                } catch (error) { console.error('History loading error:', error); }
+            };
+            
+            loadHistory();
+        });
     </script>
 </body>
 </html> 

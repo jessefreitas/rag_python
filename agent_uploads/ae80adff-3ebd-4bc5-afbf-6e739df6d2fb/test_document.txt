@@ -1,0 +1,10 @@
+
+    Este é um documento de teste para verificar se o upload está funcionando corretamente.
+    
+    O sistema RAG deve processar este documento e salvá-lo no banco de dados.
+    
+    Conteúdo adicional para testar a divisão em chunks:
+    - Item 1: Informação importante
+    - Item 2: Dados relevantes
+    - Item 3: Contexto adicional
+    

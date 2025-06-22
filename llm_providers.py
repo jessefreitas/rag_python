@@ -97,8 +97,13 @@ class OpenAIProvider(BaseLLMProvider):
     def generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """Gera resposta usando OpenAI"""
         try:
+            # Garante que o modelo não seja vazio ou None
+            model = kwargs.get('model', self.config.model_name)
+            if not model or not model.strip():
+                model = self.config.model_name
+                
             response = self.client.chat.completions.create(
-                model=kwargs.get('model', self.config.model_name),
+                model=model,
                 messages=messages,
                 temperature=kwargs.get('temperature', self.config.temperature),
                 max_tokens=kwargs.get('max_tokens', self.config.max_tokens)

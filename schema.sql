@@ -1,10 +1,10 @@
 -- =================================================================
--- Schema para o Banco de Dados de Agentes de IA
--- Baseado no diagrama ERD para um sistema multi-agente com RAG
+-- Schema para o Banco de Dados de Agentes de IA (Versão 2)
+-- Suporte a Multi-LLM e Feedback Individual
 -- =================================================================
 
 -- Requer a extensão pgvector: CREATE EXTENSION IF NOT EXISTS vector;
--- E a extensão pgcrypto para UUIDs: CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- E a extensão pgcrypto para UUIDs: CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -15,129 +15,81 @@ CREATE EXTENSION IF NOT EXISTS pgvector;
 -- Armazena a configuração principal de cada agente.
 -- ---------------------------------------------------------------------
 CREATE TABLE agentes (
-    id_agente UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    nome_agente TEXT NOT NULL,
-    descricao TEXT,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
     system_prompt TEXT,
-    modelo_base TEXT DEFAULT 'gpt-4o-mini',
-    temperatura NUMERIC(3, 2) CHECK (temperatura BETWEEN 0 AND 2) DEFAULT 0.7,
-    top_p NUMERIC(3, 2) CHECK (top_p BETWEEN 0 AND 1) DEFAULT 1.0,
-    max_tokens INTEGER DEFAULT 1024,
-    status TEXT DEFAULT 'ativo',
-    criado_em TIMESTAMPTZ DEFAULT NOW()
+    model TEXT DEFAULT 'gpt-4o-mini',
+    temperature NUMERIC(3, 2) CHECK (temperature BETWEEN 0 AND 2) DEFAULT 0.7,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE agentes IS 'Tabela central para armazenar a configuração e metadados de cada agente de IA.';
-COMMENT ON COLUMN agentes.id_agente IS 'Identificador único universal para o agente.';
-COMMENT ON COLUMN agentes.status IS 'Status do agente, ex: ativo, inativo, arquivado.';
 
 -- ---------------------------------------------------------------------
--- Tabela 2: documentos_mestre
--- Repositório central para todos os documentos e fontes de dados.
+-- Tabela 2: documents
+-- Repositório para todos os documentos e fontes de dados.
+-- O conteúdo é chunked e vetorizado na tabela 'document_chunks'.
 -- ---------------------------------------------------------------------
-CREATE TABLE documentos_mestre (
-    id_doc UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    nome_arquivo TEXT,
-    tipo_origem TEXT NOT NULL, -- 'pdf', 'url', 'txt', 'docx', etc.
-    texto_bruto TEXT,
-    hash_md5 TEXT,
-    criado_em TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_id UUID NOT NULL REFERENCES agentes(id) ON DELETE CASCADE,
+    file_name TEXT,
+    source_type TEXT NOT NULL, -- 'pdf', 'url', 'txt', 'docx', etc.
+    content_hash TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE documentos_mestre IS 'Armazena o conteúdo bruto e metadados de cada documento fonte de um agente.';
-COMMENT ON COLUMN documentos_mestre.hash_md5 IS 'Hash MD5 do conteúdo para evitar duplicatas.';
-CREATE INDEX idx_docs_agente ON documentos_mestre(id_agente);
-CREATE UNIQUE INDEX idx_docs_hash ON documentos_mestre(hash_md5);
+COMMENT ON TABLE documents IS 'Armazena metadados de cada documento fonte de um agente.';
+CREATE INDEX idx_docs_agent_id ON documents(agent_id);
+CREATE UNIQUE INDEX idx_docs_hash ON documents(content_hash);
 
 -- ---------------------------------------------------------------------
--- Tabela 3: chunks_vetorizados
+-- Tabela 3: document_chunks
 -- Armazena os pedaços de texto (chunks) e seus vetores (embeddings).
 -- ---------------------------------------------------------------------
-CREATE TABLE chunks_vetorizados (
-    id_vetor UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_doc UUID NOT NULL REFERENCES documentos_mestre(id_doc) ON DELETE CASCADE,
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    chunk_id INTEGER NOT NULL,
-    chunk_texto TEXT NOT NULL,
-    embedding VECTOR(768) NOT NULL, -- Dimensão do vetor (ex: 768 para text-embedding-ada-002)
-    modelo_embedding TEXT NOT NULL,
-    criado_em TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (id_doc, chunk_id)
+CREATE TABLE document_chunks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    agent_id UUID NOT NULL REFERENCES agentes(id) ON DELETE CASCADE,
+    chunk_text TEXT NOT NULL,
+    embedding VECTOR(1536) NOT NULL, -- Dimensão para text-embedding-3-small
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE chunks_vetorizados IS 'Coração do sistema RAG, armazena os chunks de texto e seus embeddings vetoriais.';
-CREATE INDEX idx_chunks_embedding ON chunks_vetorizados USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX idx_chunks_agente ON chunks_vetorizados(id_agente);
+COMMENT ON TABLE document_chunks IS 'Coração do RAG, armazena chunks e seus embeddings.';
+CREATE INDEX idx_chunks_embedding ON document_chunks USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX idx_chunks_agent_id ON document_chunks(agent_id);
 
 -- ---------------------------------------------------------------------
--- Tabela 4: interacoes_usuarios
+-- Tabela 4: conversations
 -- Log de todas as conversas entre usuários e agentes.
 -- ---------------------------------------------------------------------
-CREATE TABLE interacoes_usuarios (
-    id_interacao UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    entrada_usuario TEXT NOT NULL,
-    resposta_agente TEXT,
-    embedding_entrada VECTOR(768),
-    tokens_usados INTEGER,
-    satisfacao SMALLINT CHECK (satisfacao BETWEEN 1 AND 5), -- Ex: 1 a 5
-    criado_em TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_id UUID NOT NULL REFERENCES agentes(id) ON DELETE CASCADE,
+    user_message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE interacoes_usuarios IS 'Registra o histórico de conversas para fins de análise, debug e futuro fine-tuning.';
-COMMENT ON COLUMN interacoes_usuarios.satisfacao IS 'Nota de feedback do usuário sobre a qualidade da resposta.';
-CREATE INDEX idx_interacoes_agente ON interacoes_usuarios(id_agente);
-CREATE INDEX idx_interacoes_embed ON interacoes_usuarios USING ivfflat (embedding_entrada vector_cosine_ops);
+COMMENT ON TABLE conversations IS 'Registra a entrada do usuário em uma conversa com um agente.';
+CREATE INDEX idx_conversations_agent_id ON conversations(agent_id);
 
 -- ---------------------------------------------------------------------
--- Tabela 5: dataset_finetune
--- Dados estruturados para o fine-tuning supervisionado dos modelos.
+-- Tabela 5: llm_responses
+-- Armazena as respostas dos LLMs para cada conversa.
 -- ---------------------------------------------------------------------
-CREATE TABLE dataset_finetune (
-    id_ft UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    prompt TEXT NOT NULL,
-    completado TEXT NOT NULL, -- A resposta ideal (completion)
-    tipo_origem TEXT, -- Ex: 'manual', 'interacao_curada'
-    origem TEXT, -- Ex: id_interacao de onde veio
-    anotado_por TEXT,
-    criado_em TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE llm_responses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL, -- Ex: 'openai', 'google_gemini', 'anthropic'
+    model_used TEXT,
+    response_text TEXT NOT NULL,
+    tokens_used INTEGER,
+    feedback SMALLINT CHECK (feedback IN (-1, 0, 1)) DEFAULT 0, -- -1: Ruim, 0: Neutro, 1: Bom
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE dataset_finetune IS 'Armazena pares de prompt/completion para o fine-tuning dos modelos de linguagem.';
-CREATE INDEX idx_ft_agente ON dataset_finetune(id_agente);
-
--- ---------------------------------------------------------------------
--- Tabela 6: configuracoes_avancadas
--- Tabela chave-valor para configurações extras e flexíveis por agente.
--- ---------------------------------------------------------------------
-CREATE TABLE configuracoes_avancadas (
-    id_config UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    chave TEXT NOT NULL,
-    valor JSONB,
-    criado_em TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (id_agente, chave)
-);
-
-COMMENT ON TABLE configuracoes_avancadas IS 'Permite configurações adicionais e flexíveis sem alterar a tabela principal de agentes.';
-CREATE INDEX idx_conf_agente ON configuracoes_avancadas(id_agente);
-
--- ---------------------------------------------------------------------
--- Tabela 7: logs_autoRAG
--- Logs específicos para avaliar e melhorar o processo de RAG.
--- ---------------------------------------------------------------------
-CREATE TABLE logs_autoRAG (
-    id_log UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_agente UUID NOT NULL REFERENCES agentes(id_agente) ON DELETE CASCADE,
-    entrada TEXT NOT NULL,
-    contexto_rag TEXT,
-    resposta_gerada TEXT,
-    nota_feedback NUMERIC(3, 2), -- Nota de 0 a 1
-    tipo_feedback TEXT, -- 'auto', 'humano'
-    criado_em TIMESTAMPTZ DEFAULT NOW()
-);
-
-COMMENT ON TABLE logs_autoRAG IS 'Registra dados detalhados do pipeline RAG para permitir a avaliação e melhoria contínua (AutoRAG).';
-CREATE INDEX idx_logs_agente ON logs_autoRAG(id_agente); 
+COMMENT ON TABLE llm_responses IS 'Armazena cada resposta de um LLM, permitindo comparação e feedback individual.';
+COMMENT ON COLUMN llm_responses.feedback IS 'Feedback do usuário: -1 para ruim, 0 para neutro, 1 para bom.';
+CREATE INDEX idx_responses_conversation_id ON llm_responses(conversation_id); 
