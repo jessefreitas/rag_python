@@ -1,31 +1,46 @@
 """
-Sistema RAG (Retrieval-Augmented Generation) principal
-Integra carregamento de documentos, banco de vetores e geração de respostas
+Sistema RAG (Retrieval-Augmented Generation) em Python
+Combina busca de documentos com geração de texto usando IA
 """
 
 import os
 import logging
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 
-from langchain_openai import ChatOpenAI
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-from langchain.schema import Document
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
+from langchain.memory import ConversationBufferMemory
 
 from document_loader import DocumentLoader
 from vector_store import VectorStore
+from llm_providers import llm_manager
 
+# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGSystem:
-    """Sistema RAG principal que integra todos os componentes"""
+    """Sistema RAG principal que combina busca de documentos com geração de texto"""
     
-    def __init__(self, vector_db_path: str = "vector_db"):
+    def __init__(self, 
+                 vector_db_path: str = "vector_db",
+                 model_name: str = "gpt-3.5-turbo",
+                 temperature: float = 0.7,
+                 max_tokens: int = 1000,
+                 provider: str = "openai"):
+        """
+        Inicializa o sistema RAG
+        
+        Args:
+            vector_db_path: Caminho para o banco de vetores
+            model_name: Nome do modelo de IA
+            temperature: Temperatura para geração de texto
+            max_tokens: Máximo de tokens na resposta
+            provider: Provedor de IA (openai, openrouter, gemini)
+        """
         self.vector_db_path = vector_db_path
         self.document_loader = DocumentLoader()
         self.vector_store = VectorStore(
@@ -34,22 +49,23 @@ class RAGSystem:
         )
         self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         
-        # Configurar API key
-        if not os.getenv("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY não configurada. Configure a variável de ambiente ou passe como parâmetro.")
+        # Configurar provedor de IA
+        self.provider = provider
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         
-        # Configurações
-        self.model_name = "gpt-3.5-turbo"
-        self.temperature = 0.7
-        self.max_tokens = 1000
+        # Verificar se o provedor está disponível
+        if provider not in llm_manager.list_available_providers():
+            available = llm_manager.list_available_providers()
+            if not available:
+                raise ValueError("Nenhum provedor de IA configurado. Configure OPENAI_API_KEY, OPENROUTER_API_KEY ou GOOGLE_GEMINI_API_KEY")
+            else:
+                logger.warning(f"Provedor '{provider}' não disponível. Usando '{available[0]}'")
+                self.provider = available[0]
         
-        # Inicializar modelo de linguagem
-        self.llm = ChatOpenAI(
-            model_name=self.model_name,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
+        # Definir provedor ativo
+        llm_manager.set_active_provider(self.provider)
         
         # Template de prompt personalizado
         self.prompt_template = PromptTemplate(
@@ -72,136 +88,150 @@ Resposta:""",
         )
         
         # Inicializar chain de QA
-        self.qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=self.vector_store.vector_store.as_retriever(
-                search_kwargs={"k": 4}
-            ),
-            chain_type_kwargs={"prompt": self.prompt_template},
-            return_source_documents=True
-        )
+        self.qa_chain = self._create_qa_chain()
         
-        logger.info("Sistema RAG inicializado com sucesso")
+        logger.info(f"Sistema RAG inicializado com provedor: {self.provider}, modelo: {self.model_name}")
+    
+    def _create_qa_chain(self):
+        """Cria a chain de QA usando o provedor configurado"""
+        try:
+            # Usar o gerenciador de provedores para gerar respostas
+            def llm_generate(prompt: str) -> str:
+                messages = [{"role": "user", "content": prompt}]
+                return llm_manager.generate_response(
+                    messages,
+                    model=self.model_name,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
+                )
+            
+            # Criar chain customizada
+            from langchain.chains import LLMChain
+            from langchain.schema import BaseRetriever
+            
+            class CustomRetrievalQA:
+                def __init__(self, retriever, llm_chain):
+                    self.retriever = retriever
+                    self.llm_chain = llm_chain
+                
+                def __call__(self, question: str):
+                    # Buscar documentos relevantes
+                    docs = self.retriever.get_relevant_documents(question)
+                    context = "\n\n".join([doc.page_content for doc in docs])
+                    
+                    # Gerar resposta
+                    response = llm_generate(self.prompt_template.format(
+                        context=context,
+                        question=question
+                    ))
+                    
+                    return {
+                        "result": response,
+                        "source_documents": docs
+                    }
+            
+            retriever = self.vector_store.vector_store.as_retriever(search_kwargs={"k": 4})
+            return CustomRetrievalQA(retriever, None)
+            
+        except Exception as e:
+            logger.error(f"Erro ao criar chain de QA: {e}")
+            raise
     
     def load_documents(self, 
                       file_paths: Optional[List[str]] = None,
                       directory_path: Optional[str] = None,
-                      urls: Optional[List[str]] = None) -> bool:
+                      text: Optional[str] = None) -> bool:
         """
-        Carrega documentos para o sistema
+        Carrega documentos no sistema RAG
         
         Args:
             file_paths: Lista de caminhos de arquivos
-            directory_path: Caminho para diretório com documentos
-            urls: Lista de URLs para carregar
+            directory_path: Caminho do diretório
+            text: Texto direto
             
         Returns:
-            True se carregado com sucesso
+            bool: True se documentos foram carregados com sucesso
         """
         try:
-            all_documents = []
+            documents = []
             
-            # Carregar arquivos individuais
+            # Carregar de arquivos específicos
             if file_paths:
                 for file_path in file_paths:
-                    try:
-                        documents = self.document_loader.load_document(file_path)
-                        all_documents.extend(documents)
-                        logger.info(f"Arquivo carregado: {file_path}")
-                    except Exception as e:
-                        logger.error(f"Erro ao carregar {file_path}: {str(e)}")
-                        continue
+                    if os.path.exists(file_path):
+                        doc = self.document_loader.load_file(file_path)
+                        if doc:
+                            documents.extend(doc)
+                            logger.info(f"Documento carregado: {file_path}")
+                    else:
+                        logger.warning(f"Arquivo não encontrado: {file_path}")
             
-            # Carregar diretório
+            # Carregar de diretório
             if directory_path:
-                try:
-                    documents = self.document_loader.load_documents_from_directory(directory_path)
-                    all_documents.extend(documents)
-                    logger.info(f"Diretório carregado: {directory_path}")
-                except Exception as e:
-                    logger.error(f"Erro ao carregar diretório {directory_path}: {str(e)}")
+                if os.path.exists(directory_path):
+                    docs = self.document_loader.load_directory(directory_path)
+                    documents.extend(docs)
+                    logger.info(f"Documentos carregados do diretório: {directory_path}")
+                else:
+                    logger.warning(f"Diretório não encontrado: {directory_path}")
             
-            # Carregar URLs
-            if urls:
-                for url in urls:
-                    try:
-                        if self.document_loader.validate_url(url):
-                            documents = self.document_loader.load_web_page(url)
-                            all_documents.extend(documents)
-                            logger.info(f"URL carregada: {url}")
-                        else:
-                            logger.warning(f"URL inválida ou inacessível: {url}")
-                    except Exception as e:
-                        logger.error(f"Erro ao carregar URL {url}: {str(e)}")
-                        continue
+            # Carregar texto direto
+            if text:
+                from langchain.schema import Document
+                documents.append(Document(page_content=text, metadata={"source": "text_input"}))
+                logger.info("Texto direto carregado")
             
-            # Adicionar ao banco de vetores
-            if all_documents:
-                self.vector_store.add_documents(all_documents)
-                logger.info(f"Total de {len(all_documents)} documentos carregados no sistema")
-                return True
-            else:
+            if not documents:
                 logger.warning("Nenhum documento foi carregado")
                 return False
-                
+            
+            # Dividir documentos em chunks
+            texts = self.text_splitter.split_documents(documents)
+            logger.info(f"Documentos divididos em {len(texts)} chunks")
+            
+            # Adicionar ao vector store
+            self.vector_store.add_documents(texts)
+            logger.info("Documentos adicionados ao vector store")
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"Erro ao carregar documentos: {str(e)}")
+            logger.error(f"Erro ao carregar documentos: {e}")
             return False
     
-    def query(self, question: str, include_sources: bool = True) -> Dict[str, Any]:
+    def query(self, question: str) -> Dict[str, Any]:
         """
         Faz uma pergunta ao sistema RAG
         
         Args:
             question: Pergunta a ser respondida
-            include_sources: Se deve incluir fontes na resposta
             
         Returns:
-            Dicionário com resposta e fontes
+            Dict com resposta e documentos fonte
         """
         try:
-            if not question.strip():
-                return {
-                    "answer": "Por favor, forneça uma pergunta válida.",
-                    "sources": [],
-                    "success": False
-                }
+            if not self.qa_chain:
+                raise ValueError("Chain de QA não inicializada")
             
-            # Fazer a consulta
-            result = self.qa_chain({"query": question})
+            result = self.qa_chain(question)
             
-            response = {
+            return {
                 "answer": result["result"],
-                "sources": [],
-                "success": True
+                "sources": [doc.metadata.get("source", "Unknown") for doc in result["source_documents"]],
+                "documents": result["source_documents"]
             }
             
-            # Incluir fontes se solicitado
-            if include_sources and "source_documents" in result:
-                sources = []
-                for doc in result["source_documents"]:
-                    if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-                        sources.append({
-                            "source": doc.metadata["source"],
-                            "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
-                        })
-                response["sources"] = sources
-            
-            logger.info(f"Pergunta respondida: '{question}'")
-            return response
-            
         except Exception as e:
-            logger.error(f"Erro ao processar pergunta: {str(e)}")
+            logger.error(f"Erro ao processar pergunta: {e}")
             return {
                 "answer": f"Erro ao processar sua pergunta: {str(e)}",
                 "sources": [],
-                "success": False
+                "documents": []
             }
     
-    def search_similar_documents(self, query: str, k: int = 4) -> List[Dict[str, Any]]:
+    def search_similar_documents(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """
-        Busca documentos similares sem gerar resposta
+        Busca documentos similares
         
         Args:
             query: Consulta de busca
@@ -211,66 +241,39 @@ Resposta:""",
             Lista de documentos similares
         """
         try:
-            documents = self.vector_store.similarity_search(query, k=k)
+            docs = self.vector_store.vector_store.similarity_search(query, k=k)
             
             results = []
-            for doc in documents:
+            for doc in docs:
                 results.append({
                     "content": doc.page_content,
-                    "metadata": doc.metadata
+                    "metadata": doc.metadata,
+                    "score": 0.0  # ChromaDB não retorna scores por padrão
                 })
             
             return results
             
         except Exception as e:
-            logger.error(f"Erro na busca de documentos similares: {str(e)}")
+            logger.error(f"Erro na busca de documentos: {e}")
             return []
     
     def get_system_info(self) -> Dict[str, Any]:
-        """
-        Obtém informações sobre o sistema
-        
-        Returns:
-            Dicionário com informações do sistema
-        """
-        try:
-            vector_info = self.vector_store.get_collection_info()
-            
-            info = {
-                "model_name": self.model_name,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "vector_store": vector_info,
-                "document_sources": self.vector_store.get_document_sources()
-            }
-            
-            return info
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter informações do sistema: {str(e)}")
-            return {}
-    
-    def reset_system(self) -> bool:
-        """
-        Reseta completamente o sistema
-        
-        Returns:
-            True se resetado com sucesso
-        """
-        try:
-            success = self.vector_store.reset_vector_store()
-            if success:
-                logger.info("Sistema RAG resetado com sucesso")
-            return success
-            
-        except Exception as e:
-            logger.error(f"Erro ao resetar sistema: {str(e)}")
-            return False
+        """Retorna informações sobre o sistema"""
+        return {
+            "provider": self.provider,
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "vector_db_path": self.vector_db_path,
+            "available_providers": llm_manager.list_available_providers(),
+            "provider_info": llm_manager.get_provider_info()
+        }
     
     def update_model_settings(self, 
                             model_name: Optional[str] = None,
                             temperature: Optional[float] = None,
-                            max_tokens: Optional[int] = None) -> bool:
+                            max_tokens: Optional[int] = None,
+                            provider: Optional[str] = None) -> bool:
         """
         Atualiza configurações do modelo
         
@@ -278,11 +281,20 @@ Resposta:""",
             model_name: Novo nome do modelo
             temperature: Nova temperatura
             max_tokens: Novo máximo de tokens
+            provider: Novo provedor
             
         Returns:
-            True se atualizado com sucesso
+            bool: True se atualizado com sucesso
         """
         try:
+            if provider and provider != self.provider:
+                if provider in llm_manager.list_available_providers():
+                    self.provider = provider
+                    llm_manager.set_active_provider(provider)
+                else:
+                    logger.error(f"Provedor '{provider}' não disponível")
+                    return False
+            
             if model_name:
                 self.model_name = model_name
             if temperature is not None:
@@ -290,24 +302,8 @@ Resposta:""",
             if max_tokens:
                 self.max_tokens = max_tokens
             
-            # Recriar modelo com novas configurações
-            self.llm = ChatOpenAI(
-                model_name=self.model_name,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
-            )
-            
-            # Recriar chain
-            self.qa_chain = RetrievalQA.from_chain_type(
-                llm=self.llm,
-                chain_type="stuff",
-                retriever=self.vector_store.vector_store.as_retriever(
-                    search_kwargs={"k": 4}
-                ),
-                chain_type_kwargs={"prompt": self.prompt_template},
-                return_source_documents=True
-            )
+            # Recriar chain com novas configurações
+            self.qa_chain = self._create_qa_chain()
             
             logger.info("Configurações do modelo atualizadas")
             return True
