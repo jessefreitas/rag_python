@@ -7,6 +7,54 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Planejado
+- Interface Streamlit para compliance LGPD
+- Dashboard de monitoramento de privacidade
+- Integração com Microsoft Presidio (PII detection avançada)
+- API REST para sistema de privacidade
+
+## [1.2.0] - 2025-06-22
+
+### Added - Sistema de Privacidade e Compliance LGPD
+- **privacy_system.py**: Sistema completo de privacidade e anonimização
+  - Detecção automática de dados pessoais (CPF, CNPJ, email, telefone, RG, CEP)
+  - Classificação de sensibilidade conforme LGPD
+  - Múltiplos métodos de anonimização (pseudonimização, mascaramento, dados falsos)
+  - Políticas de retenção automáticas (30 dias, 6 meses, 1 ano, 5 anos)
+  - Trilha de auditoria completa para compliance
+  - Soft delete e hard delete com logs
+  - Limpeza automática baseada em políticas de retenção
+
+- **agent_system_privacy.py**: Agentes com consciência de privacidade
+  - PrivacyAwareAgent com 3 níveis (standard, high, maximum)
+  - Processamento de documentos com verificação automática de dados pessoais
+  - Controle de consentimento granular
+  - Anonimização em tempo real durante processamento
+  - Relatórios de compliance individuais por agente
+  - Integração completa com sistema de auditoria
+
+- **test_privacy_integration.py**: Testes completos do sistema integrado
+  - Validação de todos os níveis de privacidade
+  - Teste de processamento com dados pessoais reais
+  - Verificação de consentimento e anonimização
+  - Ciclo de vida completo dos dados
+  - Integração Multi-LLM + Privacidade
+
+### Dependencies Added
+- `faker>=19.0.0`: Geração de dados falsos para anonimização
+- `scrubadub>=2.0.0`: Detecção automática de PII
+- `cryptography>=41.0.0`: Criptografia avançada
+
+### LGPD Compliance Features
+- Privacy by design nativo
+- Consentimento granular por operação
+- Direito ao esquecimento automatizado
+- Portabilidade de dados com export anonimizado
+- Auditoria completa de todas as operações
+- Retenção automática conforme políticas definidas
+
+## [1.1.0] - 2025-06-22
+
 ### Added
 - **DeepSeek Provider**: Integração com modelos DeepSeek (deepseek-chat, deepseek-coder, deepseek-math)
 - **Sistema Multi-LLM Expandido**: Comparação simultânea de múltiplos LLMs
