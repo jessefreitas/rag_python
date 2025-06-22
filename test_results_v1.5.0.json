@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-06-22T20:10:05.230044",
+  "version": "1.5.0",
+  "tests": {
+    "imports": {
+      "status": "success",
+      "message": "All modules imported"
+    },
+    "privacy": {
+      "status": "success",
+      "data_types_found": 5,
+      "total_items": 5
+    },
+    "orchestrator": {
+      "status": "success",
+      "active_pipelines": 0,
+      "history_count": 0
+    },
+    "llm_providers": {
+      "status": "success",
+      "provider_count": 1,
+      "providers": [
+        "openai"
+      ]
+    },
+    "document_generation": {
+      "status": "success",
+      "document_name": "contrato_prestacao_servicos_2fc9ba46.docx",
+      "document_status": "sucesso",
+      "format": "docx"
+    },
+    "agents": {
+      "status": "success",
+      "agent_count": 1
+    }
+  },
+  "overall_status": "success"
+}

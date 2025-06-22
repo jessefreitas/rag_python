@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - RAG Python
+name: RAG Python CI/CD Pipeline
 
 on:
   push:
@@ -9,167 +9,25 @@ on:
     types: [ published ]
 
 env:
-  PYTHON_VERSION: '3.9'
-
+  PYTHON_VERSION: '3.12'
+  
 jobs:
+  # 🧪 TESTES E QUALIDADE
   test:
-    name: 🧪 Testes Automatizados
+    name: 🧪 Tests & Quality
     runs-on: ubuntu-latest
     
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
-    
-    steps:
-    - name: 📥 Checkout código
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Configurar Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: 📦 Cache dependências
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: 🔧 Instalar dependências
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov flake8 black isort
-    
-    - name: 🎨 Verificar formatação (Black)
-      run: |
-        black --check --diff .
-      continue-on-error: true
-    
-    - name: 📋 Verificar imports (isort)
-      run: |
-        isort --check-only --diff .
-      continue-on-error: true
-    
-    - name: 🔍 Análise estática (Flake8)
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      continue-on-error: true
-    
-    - name: 🧪 Executar testes
-      run: |
-        python test_suite_complete.py
-      env:
-        # Mock das API keys para testes
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test_key' }}
-        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'test_key' }}
-        DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY || 'test_key' }}
-    
-    - name: 📊 Cobertura de testes
-      run: |
-        pytest --cov=. --cov-report=xml --cov-report=term
-      continue-on-error: true
-    
-    - name: 📤 Upload cobertura para Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-      continue-on-error: true
-
-  security:
-    name: 🔒 Análise de Segurança
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-    - name: 📥 Checkout código
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Configurar Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: 🔒 Instalar ferramentas de segurança
-      run: |
-        pip install bandit safety
-    
-    - name: 🛡️ Verificar vulnerabilidades (Bandit)
-      run: |
-        bandit -r . -f json -o bandit-report.json
-      continue-on-error: true
-    
-    - name: 📦 Verificar dependências (Safety)
-      run: |
-        safety check --json --output safety-report.json
-      continue-on-error: true
-    
-    - name: 📤 Upload relatórios de segurança
-      uses: actions/upload-artifact@v3
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json
-      if: always()
-
-  build:
-    name: 🏗️ Build e Validação
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    
-    steps:
-    - name: 📥 Checkout código
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Configurar Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: 🔧 Instalar dependências
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install build twine
-    
-    - name: 📋 Verificar configuração
-      run: |
-        python -c "from privacy_system import privacy_manager; print('✅ Privacy system OK')"
-        python -c "from llm_providers import LLMProviderManager; print('✅ LLM providers OK')"
-        python -c "from rag_system import RAGSystem; print('✅ RAG system OK')"
-    
-    - name: 🏗️ Build do pacote
-      run: |
-        python -m build
-    
-    - name: ✅ Verificar pacote
-      run: |
-        python -m twine check dist/*
-    
-    - name: 📤 Upload artefatos
-      uses: actions/upload-artifact@v3
-      with:
-        name: dist-packages
-        path: dist/
-
-  integration-test:
-    name: 🔗 Testes de Integração
-    runs-on: ubuntu-latest
-    needs: build
+        python-version: ['3.10', '3.11', '3.12']
     
     services:
       postgres:
-        image: postgres:13
+        image: postgres:15
         env:
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: test_rag_db
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: rag_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -179,90 +37,294 @@ jobs:
           - 5432:5432
     
     steps:
-    - name: 📥 Checkout código
+    - name: 📥 Checkout
       uses: actions/checkout@v4
-    
-    - name: 🐍 Configurar Python
+      
+    - name: 🐍 Setup Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: 🔧 Instalar dependências
+        python-version: ${{ matrix.python-version }}
+        
+    - name: 📦 Cache Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: 🔧 Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install psycopg2-binary
-    
-    - name: 🗄️ Configurar banco de dados
-      run: |
-        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/test_rag_db"
-        python -c "
-        import psycopg2
-        conn = psycopg2.connect('postgresql://postgres:test_password@localhost:5432/test_rag_db')
-        with open('schema.sql', 'r') as f:
-            conn.cursor().execute(f.read())
-        conn.commit()
-        print('✅ Database initialized')
-        "
-    
-    - name: 🧪 Testes de integração
-      run: |
-        python -c "
-        from privacy_system import privacy_manager
-        from llm_providers import LLMProviderManager
+        pip install pytest pytest-cov pytest-asyncio pytest-mock
+        pip install safety bandit
         
-        # Teste básico de integração
-        content = 'Teste: João (CPF: 123.456.789-10)'
-        detection = privacy_manager.detect_personal_data_only(content)
-        assert detection['has_personal_data']
-        print('✅ Integration test passed')
-        "
+    - name: 🔍 Code Quality - Bandit Security
+      run: bandit -r . -f json -o bandit-report.json || true
+      
+    - name: 🛡️ Security - Safety Check
+      run: safety check --json --output safety-report.json || true
+      
+    - name: 🧪 Run Tests
       env:
-        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/test_rag_db
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rag_test
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      run: |
+        pytest test_pytest_suite.py test_integration_complete.py \
+          --cov=. \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term-missing \
+          --junitxml=pytest-report.xml \
+          -v
+          
+    - name: 📊 Upload Coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        
+    - name: 📋 Upload Test Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}
+        path: |
+          pytest-report.xml
+          htmlcov/
+          bandit-report.json
+          safety-report.json
 
-  deploy-staging:
-    name: 🚀 Deploy Staging
+  # 🔒 TESTES ESPECÍFICOS LGPD
+  privacy-tests:
+    name: 🔒 LGPD Privacy Tests
     runs-on: ubuntu-latest
-    needs: [integration-test]
-    if: github.ref == 'refs/heads/develop'
+    needs: test
     
     steps:
-    - name: 📥 Checkout código
+    - name: 📥 Checkout
       uses: actions/checkout@v4
-    
-    - name: 🚀 Deploy para staging
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔧 Install Dependencies
       run: |
-        echo "🚀 Deploy para ambiente de staging..."
-        echo "📦 Versão: $(python -c 'from __version__ import __version__; print(__version__)')"
-        # Aqui seria implementado o deploy real
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-mock
+        
+    - name: 🔒 Run Privacy Tests
+      run: |
+        pytest test_pytest_suite.py::TestPrivacySystem \
+          test_pytest_suite.py::TestIntegration::test_privacy_document_integration \
+          -v --tb=short
+          
+    - name: 📋 Privacy Test Report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: privacy-test-results
+        path: pytest-report.xml
 
-  deploy-production:
-    name: 🌟 Deploy Produção
+  # 🤖 TESTES CREWAI
+  crewai-tests:
+    name: 🤖 CrewAI Tests
     runs-on: ubuntu-latest
-    needs: [integration-test]
-    if: github.event_name == 'release'
+    needs: test
     
     steps:
-    - name: 📥 Checkout código
+    - name: 📥 Checkout
       uses: actions/checkout@v4
-    
-    - name: 🌟 Deploy para produção
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔧 Install Dependencies
       run: |
-        echo "🌟 Deploy para ambiente de produção..."
-        echo "📦 Versão: ${{ github.event.release.tag_name }}"
-        # Aqui seria implementado o deploy real
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-mock
+        
+    - name: 🤖 Run CrewAI Tests
+      run: |
+        pytest test_pytest_suite.py::TestCrewAIOrchestrator \
+          -v --tb=short
+          
+    - name: 📋 CrewAI Test Report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: crewai-test-results
+        path: pytest-report.xml
 
-  notification:
-    name: 📢 Notificações
+  # 📄 TESTES GERAÇÃO DE DOCUMENTOS
+  document-tests:
+    name: 📄 Document Generation Tests
     runs-on: ubuntu-latest
-    needs: [test, security, build, integration-test]
+    needs: test
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔧 Install LibreOffice (for PDF conversion)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libreoffice
+        
+    - name: 🔧 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-mock
+        
+    - name: 📄 Run Document Tests
+      run: |
+        pytest test_pytest_suite.py::TestDocumentGeneration \
+          -v --tb=short
+          
+    - name: 📋 Document Test Report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: document-test-results
+        path: pytest-report.xml
+
+  # 🏗️ BUILD E VALIDAÇÃO
+  build:
+    name: 🏗️ Build & Validate
+    runs-on: ubuntu-latest
+    needs: [test, privacy-tests, crewai-tests, document-tests]
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔧 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install build twine
+        
+    - name: 🏗️ Build Package
+      run: python -m build
+      
+    - name: ✅ Validate Package
+      run: twine check dist/*
+      
+    - name: 📋 Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: dist/
+
+  # 🚀 DEPLOY (apenas em releases)
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release' && github.event.action == 'published'
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 📦 Download Build Artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+        path: dist/
+        
+    - name: 🚀 Deploy to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: twine upload dist/*
+      
+    - name: 🏷️ Create GitHub Release Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+        generate_release_notes: true
+
+  # 📊 RELATÓRIO FINAL
+  report:
+    name: 📊 Final Report
+    runs-on: ubuntu-latest
+    needs: [test, privacy-tests, crewai-tests, document-tests, build]
     if: always()
     
     steps:
-    - name: 📢 Notificar resultado
+    - name: 📥 Download All Artifacts
+      uses: actions/download-artifact@v3
+      
+    - name: 📊 Generate Report
       run: |
-        if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.build.result }}" == "success" ]; then
-          echo "✅ Pipeline executado com sucesso!"
-        else
-          echo "❌ Pipeline falhou em alguma etapa"
-        fi 
+        echo "# 🚀 RAG Python CI/CD Report" > report.md
+        echo "" >> report.md
+        echo "## 📋 Test Results Summary" >> report.md
+        echo "- ✅ Main Tests: ${{ needs.test.result }}" >> report.md
+        echo "- 🔒 Privacy Tests: ${{ needs.privacy-tests.result }}" >> report.md
+        echo "- 🤖 CrewAI Tests: ${{ needs.crewai-tests.result }}" >> report.md
+        echo "- 📄 Document Tests: ${{ needs.document-tests.result }}" >> report.md
+        echo "- 🏗️ Build: ${{ needs.build.result }}" >> report.md
+        echo "" >> report.md
+        echo "## 🔗 Links" >> report.md
+        echo "- [Commit: ${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> report.md
+        echo "- [Branch: ${{ github.ref_name }}](${{ github.server_url }}/${{ github.repository }}/tree/${{ github.ref_name }})" >> report.md
+        
+    - name: 📋 Upload Final Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: final-report
+        path: report.md
+
+  # 🔄 CLEANUP
+  cleanup:
+    name: 🔄 Cleanup
+    runs-on: ubuntu-latest
+    needs: [report]
+    if: always()
+    
+    steps:
+    - name: 🧹 Cleanup Old Artifacts
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+          });
+          
+          // Keep only the last 10 artifacts
+          const oldArtifacts = artifacts.data.artifacts
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(10);
+            
+          for (const artifact of oldArtifacts) {
+            await github.rest.actions.deleteArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: artifact.id,
+            });
+          } 
