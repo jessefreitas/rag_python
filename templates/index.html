@@ -252,57 +252,79 @@
             chatModal.show();
         }
 
+        function addMessage(message, sender) {
+            const chatContainer = document.getElementById('chatContainer');
+            // Remove a mensagem inicial se ela existir
+            const initialMessage = chatContainer.querySelector('.text-muted');
+            if (initialMessage) {
+                chatContainer.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = message;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function setLoading(isLoading) {
+            const chatContainer = document.getElementById('chatContainer');
+            let loadingDiv = document.getElementById('loading-message');
+
+            if (isLoading) {
+                if (!loadingDiv) {
+                    loadingDiv = document.createElement('div');
+                    loadingDiv.className = 'message agent';
+                    loadingDiv.id = 'loading-message';
+                    loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+                    chatContainer.appendChild(loadingDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            } else {
+                if (loadingDiv) {
+                    loadingDiv.remove();
+                }
+            }
+        }
+
         function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+
             if (!message || !currentAgentId) return;
-            
-            // Adicionar mensagem do usuário
+
             addMessage(message, 'user');
-            input.value = '';
-            
-            // Mostrar loading
-            addMessage('Processando...', 'agent', true);
-            
-            // Enviar para API
+            chatInput.value = '';
+            setLoading(true);
+
             fetch(`/api/agents/${currentAgentId}/query`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ question: message })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input: message })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().catch(() => {
+                        throw new Error(`Erro no servidor: ${response.status} ${response.statusText}`);
+                    }).then(errorData => {
+                        throw new Error(errorData.response || errorData.error || `Erro ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
-                // Remover loading
-                removeLoadingMessage();
-                
-                if (data.success) {
-                    addMessage(data.answer, 'agent');
+                setLoading(false);
+                if (data && data.response) {
+                    addMessage(data.response, 'agent');
                 } else {
-                    addMessage(`Erro: ${data.error}`, 'agent');
+                    addMessage('Não recebi uma resposta válida do agente.', 'agent');
                 }
             })
             .catch(error => {
-                removeLoadingMessage();
-                addMessage(`Erro de conexão: ${error}`, 'agent');
+                setLoading(false);
+                console.error('Erro ao enviar mensagem:', error);
+                addMessage(`Erro: ${error.message || 'Ocorreu um problema desconhecido.'}`, 'agent');
             });
-        }
-
-        function addMessage(text, type, loading = false) {
-            const container = document.getElementById('chatContainer');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            if (loading) messageDiv.className += ' loading';
-            messageDiv.textContent = text;
-            container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function removeLoadingMessage() {
-            const loadingMessages = document.querySelectorAll('.message.loading');
-            loadingMessages.forEach(msg => msg.remove());
         }
 
         // Atualizar uptime

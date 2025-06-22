@@ -3,212 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Agentes - Sistema RAG</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Gerenciar Agentes - RAG Python</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
         .agent-card {
             transition: transform 0.2s;
-            border-left: 4px solid #007bff;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         .agent-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
         }
-        .form-section {
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
+        .btn-floating {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        .prompt-example {
-            background-color: #e9ecef;
-            border-left: 4px solid #007bff;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-top: 0.5rem;
+        .modal-lg {
+            max-width: 800px;
         }
-        .tool-item {
-            display: flex;
-            align-items: center;
-            padding: 0.5rem;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            margin-bottom: 0.5rem;
+        .provider-badge {
+            font-size: 0.8em;
+            padding: 0.3em 0.6em;
         }
-        .tool-item input[type="checkbox"] {
-            margin-right: 0.5rem;
+        .model-select {
+            max-height: 200px;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="/">
-                <i class="fas fa-robot me-2"></i>Sistema de Agentes RAG
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">
-                    <i class="fas fa-home me-1"></i>Dashboard
-                </a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mt-4">
+    <div class="container-fluid">
         <!-- Header -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <h1 class="display-5">
-                    <i class="fas fa-cogs me-2"></i>Gerenciar Agentes
-                </h1>
-                <p class="lead">Crie e configure seus agentes de IA personalizados</p>
+        <div class="row bg-primary text-white p-3 mb-4">
+            <div class="col">
+                <h1><i class="fas fa-robot me-2"></i>Gerenciar Agentes</h1>
+                <p class="lead mb-0">Crie e configure seus agentes de IA personalizados</p>
             </div>
         </div>
 
-        <!-- Botão Novo Agente -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <button class="btn btn-primary btn-lg" onclick="showCreateForm()">
-                    <i class="fas fa-plus me-2"></i>Novo Agente
-                </button>
+        <!-- Dashboard Stats -->
+        <div class="row mb-4" id="dashboardStats">
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h3><i class="fas fa-robot me-2"></i>Total de Agentes</h3>
+                    <h2 id="totalAgents">0</h2>
+                </div>
             </div>
-        </div>
-
-        <!-- Formulário de Criação/Edição -->
-        <div class="row mb-4" id="agentForm" style="display: none;">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-edit me-2"></i>
-                            <span id="formTitle">Criar Novo Agente</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="createAgentForm">
-                            <input type="hidden" id="agentId" name="agentId">
-                            
-                            <!-- Informações Básicas -->
-                            <div class="form-section">
-                                <h6><i class="fas fa-info-circle me-2"></i>Informações Básicas</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="agentName" class="form-label">Nome do Agente *</label>
-                                            <input type="text" class="form-control" id="agentName" name="name" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="agentDescription" class="form-label">Descrição *</label>
-                                            <input type="text" class="form-control" id="agentDescription" name="description" required>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Prompt do Sistema -->
-                            <div class="form-section">
-                                <h6><i class="fas fa-comment me-2"></i>Prompt do Sistema *</h6>
-                                <div class="mb-3">
-                                    <label for="systemPrompt" class="form-label">Instruções para o Agente</label>
-                                    <textarea class="form-control" id="systemPrompt" name="system_prompt" rows="6" required 
-                                              placeholder="Defina como o agente deve se comportar e responder..."></textarea>
-                                    <div class="prompt-example">
-                                        <strong>Exemplo:</strong><br>
-                                        "Você é um assistente especializado em [área]. Sua função é [função específica]. 
-                                        Sempre responda de forma [tom/estilo]. Use as informações dos documentos fornecidos 
-                                        para dar respostas precisas e úteis."
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Configurações Avançadas -->
-                            <div class="form-section">
-                                <h6><i class="fas fa-sliders-h me-2"></i>Configurações Avançadas</h6>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="mb-3">
-                                            <label for="modelName" class="form-label">Modelo de IA</label>
-                                            <select class="form-select" id="modelName" name="model_name">
-                                                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                                                <option value="gpt-4">GPT-4</option>
-                                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="mb-3">
-                                            <label for="temperature" class="form-label">Temperatura (0.0 - 1.0)</label>
-                                            <input type="range" class="form-range" id="temperature" name="temperature" 
-                                                   min="0" max="1" step="0.1" value="0.7">
-                                            <div class="text-center">
-                                                <span id="tempValue">0.7</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="mb-3">
-                                            <label for="maxIterations" class="form-label">Máx. Iterações</label>
-                                            <input type="number" class="form-control" id="maxIterations" name="max_iterations" 
-                                                   min="1" max="10" value="5">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="memoryEnabled" name="memory" checked>
-                                        <label class="form-check-label" for="memoryEnabled">
-                                            Ativar memória de conversação
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Ferramentas -->
-                            <div class="form-section">
-                                <h6><i class="fas fa-tools me-2"></i>Ferramentas Disponíveis</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="tool-item">
-                                            <input type="checkbox" id="toolRagQuery" name="tools" value="rag_query" checked>
-                                            <label for="toolRagQuery">
-                                                <strong>Consulta RAG</strong><br>
-                                                <small class="text-muted">Permite consultar documentos específicos</small>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="tool-item">
-                                            <input type="checkbox" id="toolSearch" name="tools" value="search_documents" checked>
-                                            <label for="toolSearch">
-                                                <strong>Busca de Documentos</strong><br>
-                                                <small class="text-muted">Busca documentos similares</small>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Botões -->
-                            <div class="d-flex justify-content-between">
-                                <button type="button" class="btn btn-secondary" onclick="hideForm()">
-                                    <i class="fas fa-times me-1"></i>Cancelar
-                                </button>
-                                <div>
-                                    <button type="button" class="btn btn-info me-2" onclick="saveAsTemplate()">
-                                        <i class="fas fa-save me-1"></i>Salvar como Template
-                                    </button>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-check me-1"></i>Salvar Agente
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h3><i class="fas fa-file-alt me-2"></i>Total de Documentos</h3>
+                    <h2 id="totalDocuments">0</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h3><i class="fas fa-thumbs-up me-2"></i>Respostas Boas</h3>
+                    <h2 id="goodRatings">0</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h3><i class="fas fa-thumbs-down me-2"></i>Respostas Ruins</h3>
+                    <h2 id="badRatings">0</h2>
                 </div>
             </div>
         </div>
@@ -216,203 +94,405 @@
         <!-- Lista de Agentes -->
         <div class="row">
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-list me-2"></i>Agentes Criados
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="agentsList">
-                            <!-- Agentes serão carregados aqui pelo JavaScript -->
-                        </div>
-                    </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2><i class="fas fa-list me-2"></i>Agentes Disponíveis</h2>
+                    <button class="btn btn-primary btn-lg" onclick="openCreateModal()">
+                        <i class="fas fa-plus me-2"></i>Novo Agente
+                    </button>
+                </div>
+                
+                <div id="agentsList" class="row">
+                    <!-- Agentes serão carregados aqui -->
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal de Confirmação -->
-    <div class="modal fade" id="confirmModal" tabindex="-1">
-        <div class="modal-dialog">
+    <!-- Modal de Criação/Edição de Agente -->
+    <div class="modal fade" id="agentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Confirmar Ação</h5>
+                    <h5 class="modal-title" id="modalTitle">Criar Novo Agente</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p id="confirmMessage"></p>
+                    <form id="agentForm">
+                        <input type="hidden" id="agentId" name="agent_id">
+                        
+                        <!-- Informações Básicas -->
+                        <div class="form-section">
+                            <h6><i class="fas fa-info-circle me-2"></i>Informações Básicas</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="agentName" class="form-label">Nome do Agente</label>
+                                        <input type="text" class="form-control" id="agentName" name="name" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="agentDescription" class="form-label">Descrição</label>
+                                        <input type="text" class="form-control" id="agentDescription" name="description" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configurações de IA -->
+                        <div class="form-section">
+                            <h6><i class="fas fa-brain me-2"></i>Configurações de IA</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="providerSelect" class="form-label">Provedor de IA</label>
+                                        <select class="form-select" id="providerSelect" name="provider" onchange="loadProviderModels()">
+                                            <option value="">Carregando...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="modelSelect" class="form-label">Modelo</label>
+                                        <select class="form-select model-select" id="modelSelect" name="model_name" required>
+                                            <option value="">Selecione um provedor primeiro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="temperature" class="form-label">Temperatura (0.0 - 1.0)</label>
+                                        <input type="range" class="form-range" id="temperature" name="temperature" 
+                                               min="0" max="1" step="0.1" value="0.7">
+                                        <div class="text-center">
+                                            <span id="tempValue">0.7</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Prompt do Sistema -->
+                        <div class="form-section">
+                            <h6><i class="fas fa-comment me-2"></i>Prompt do Sistema</h6>
+                            <div class="mb-3">
+                                <label for="systemPrompt" class="form-label">Instruções do Sistema</label>
+                                <textarea class="form-control" id="systemPrompt" name="system_prompt" rows="4" 
+                                          placeholder="Defina como o agente deve se comportar...">Você é um assistente prestativo que responde perguntas baseado no contexto fornecido.</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Configurações Avançadas -->
+                        <div class="form-section">
+                            <h6><i class="fas fa-sliders-h me-2"></i>Configurações Avançadas</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="maxTokens" class="form-label">Máximo de Tokens</label>
+                                        <input type="number" class="form-control" id="maxTokens" name="max_tokens" 
+                                               min="100" max="4000" value="1000">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="memoryEnabled" name="memory" checked>
+                                            <label class="form-check-label" for="memoryEnabled">
+                                                Habilitar Memória de Conversa
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-danger" id="confirmButton">Confirmar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAgent()">Salvar Agente</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Botão Flutuante -->
+    <button class="btn btn-primary btn-floating" onclick="openCreateModal()">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let editAgentId = null;
-        let confirmCallback = null;
-        const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+        let agents = [];
+        let providers = {};
+        let currentAgentId = null;
 
-        // Funções para mostrar/esconder o formulário
-        function showCreateForm() {
-            editAgentId = null;
-            document.getElementById('createAgentForm').reset();
-            document.getElementById('agentId').value = '';
-            document.getElementById('formTitle').innerText = 'Criar Novo Agente';
-            document.getElementById('tempValue').innerText = '0.7';
-            document.getElementById('agentForm').style.display = 'block';
-        }
+        // Carregar dados iniciais
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardStats();
+            loadAgents();
+            loadProviders();
+        });
 
-        function hideForm() {
-            document.getElementById('agentForm').style.display = 'none';
-        }
-
-        async function showEditForm(agentId) {
+        // Carregar estatísticas do dashboard
+        async function loadDashboardStats() {
             try {
-                const response = await fetch(`/api/agents/${agentId}`);
-                if (!response.ok) throw new Error('Agente não encontrado');
-                const agent = await response.json();
+                const response = await fetch('/api/v1/dashboard/stats');
+                const stats = await response.json();
                 
-                document.getElementById('agentId').value = agent.id;
-                document.getElementById('agentName').value = agent.name;
-                document.getElementById('agentDescription').value = agent.description;
-                document.getElementById('systemPrompt').value = agent.system_prompt;
-                document.getElementById('modelName').value = agent.model_name;
-                document.getElementById('temperature').value = agent.temperature;
-                document.getElementById('tempValue').innerText = agent.temperature;
-                // Outros campos podem ser preenchidos aqui
-                
-                document.getElementById('formTitle').innerText = 'Editar Agente';
-                document.getElementById('agentForm').style.display = 'block';
+                document.getElementById('totalAgents').textContent = stats.total_agents;
+                document.getElementById('totalDocuments').textContent = stats.total_documents;
+                document.getElementById('goodRatings').textContent = stats.good_ratings;
+                document.getElementById('badRatings').textContent = stats.bad_ratings;
             } catch (error) {
-                console.error('Erro ao buscar agente para edição:', error);
-                alert('Não foi possível carregar os dados do agente.');
+                console.error('Erro ao carregar estatísticas:', error);
             }
         }
-        
-        // Função para carregar os agentes da API
+
+        // Carregar agentes
         async function loadAgents() {
             try {
-                const response = await fetch('/api/agents'); // URL corrigida
-                if (!response.ok) {
-                    throw new Error(`Erro na rede: ${response.statusText}`);
-                }
-                const agents = await response.json();
-                const agentsList = document.getElementById('agentsList');
-                agentsList.innerHTML = ''; // Limpar
-                
-                if (agents.length === 0) {
-                    agentsList.innerHTML = `
-                        <div class="text-center text-muted p-4">
-                            <i class="fas fa-robot fa-3x mb-2"></i>
-                            <p>Nenhum agente criado ainda</p>
-                            <p>Clique em "Novo Agente" para começar.</p>
-                        </div>`;
-                } else {
-                    agents.forEach(agent => {
-                        const card = `
-                            <div class="card agent-card mb-3">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
-                                            <h5 class="card-title">${agent.name}</h5>
-                                            <p class="card-text text-muted">${agent.description}</p>
-                                        </div>
-                                        <div>
-                                            <a href="/agent/${agent.id}" class="btn btn-outline-primary btn-sm">
-                                                <i class="fas fa-eye me-1"></i>Ver Detalhes
-                                            </a>
-                                            <button class="btn btn-outline-secondary btn-sm" onclick="showEditForm('${agent.id}')">
-                                                <i class="fas fa-edit me-1"></i>Editar
-                                            </button>
-                                            <button class="btn btn-outline-danger btn-sm" onclick="confirmDelete('${agent.id}', '${agent.name}')">
-                                                <i class="fas fa-trash me-1"></i>Deletar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>`;
-                        agentsList.insertAdjacentHTML('beforeend', card);
-                    });
-                }
+                const response = await fetch('/api/v1/agents');
+                agents = await response.json();
+                displayAgents();
             } catch (error) {
                 console.error('Erro ao carregar agentes:', error);
-                document.getElementById('agentsList').innerHTML = '<p class="text-danger">Falha ao carregar agentes. Tente novamente mais tarde.</p>';
             }
         }
 
-        // Evento de submit do formulário
-        document.getElementById('createAgentForm').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            const agentId = document.getElementById('agentId').value;
-            const url = agentId ? `/api/agents/${agentId}` : '/api/agents';
-            const method = agentId ? 'PUT' : 'POST';
+        // Carregar provedores
+        async function loadProviders() {
+            try {
+                const response = await fetch('/api/v1/providers');
+                const providerInfo = await response.json();
+                providers = providerInfo.providers || {};
+                
+                // Preencher seletor de provedores
+                const providerSelect = document.getElementById('providerSelect');
+                providerSelect.innerHTML = '<option value="">Selecione um provedor</option>';
+                
+                Object.keys(providers).forEach(providerName => {
+                    const option = document.createElement('option');
+                    option.value = providerName;
+                    option.textContent = `${providerName.charAt(0).toUpperCase() + providerName.slice(1)} (${providers[providerName].model_name})`;
+                    providerSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar provedores:', error);
+            }
+        }
 
-            const formData = new FormData(this);
-            const data = {
+        // Carregar modelos de um provedor
+        async function loadProviderModels() {
+            const providerSelect = document.getElementById('providerSelect');
+            const modelSelect = document.getElementById('modelSelect');
+            const provider = providerSelect.value;
+            
+            if (!provider) {
+                modelSelect.innerHTML = '<option value="">Selecione um provedor primeiro</option>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/v1/providers/${provider}/models`);
+                const data = await response.json();
+                
+                modelSelect.innerHTML = '<option value="">Carregando modelos...</option>';
+                
+                if (data.models && data.models.length > 0) {
+                    modelSelect.innerHTML = '<option value="">Selecione um modelo</option>';
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        modelSelect.appendChild(option);
+                    });
+                } else {
+                    modelSelect.innerHTML = '<option value="">Nenhum modelo disponível</option>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar modelos:', error);
+                modelSelect.innerHTML = '<option value="">Erro ao carregar modelos</option>';
+            }
+        }
+
+        // Exibir agentes
+        function displayAgents() {
+            const container = document.getElementById('agentsList');
+            container.innerHTML = '';
+            
+            if (agents.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center py-5">
+                        <i class="fas fa-robot fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">Nenhum agente criado ainda</h4>
+                        <p class="text-muted">Clique no botão "Novo Agente" para começar</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            agents.forEach(agent => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 col-lg-4 mb-4';
+                card.innerHTML = `
+                    <div class="card agent-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <h5 class="card-title mb-0">${agent.name}</h5>
+                                <span class="badge bg-primary provider-badge">${agent.model_name}</span>
+                            </div>
+                            <p class="card-text text-muted">${agent.description}</p>
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-file-alt me-1"></i>${agent.document_count} documentos
+                                </small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-primary btn-sm" onclick="viewAgent('${agent.id}')">
+                                    <i class="fas fa-eye me-1"></i>Ver
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="editAgent('${agent.id}')">
+                                    <i class="fas fa-edit me-1"></i>Editar
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" onclick="deleteAgent('${agent.id}')">
+                                    <i class="fas fa-trash me-1"></i>Deletar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-footer text-muted">
+                            <small>Criado em ${new Date(agent.created_at).toLocaleDateString()}</small>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Abrir modal de criação
+        function openCreateModal() {
+            currentAgentId = null;
+            document.getElementById('modalTitle').textContent = 'Criar Novo Agente';
+            document.getElementById('agentForm').reset();
+            document.getElementById('tempValue').textContent = '0.7';
+            
+            // Resetar seletores
+            document.getElementById('providerSelect').value = '';
+            document.getElementById('modelSelect').innerHTML = '<option value="">Selecione um provedor primeiro</option>';
+            
+            new bootstrap.Modal(document.getElementById('agentModal')).show();
+        }
+
+        // Editar agente
+        function editAgent(agentId) {
+            const agent = agents.find(a => a.id === agentId);
+            if (!agent) return;
+            
+            currentAgentId = agentId;
+            document.getElementById('modalTitle').textContent = 'Editar Agente';
+            
+            // Preencher formulário
+            document.getElementById('agentName').value = agent.name;
+            document.getElementById('agentDescription').value = agent.description;
+            document.getElementById('systemPrompt').value = agent.system_prompt;
+            document.getElementById('temperature').value = agent.temperature;
+            document.getElementById('tempValue').textContent = agent.temperature;
+            
+            // Configurar provedor e modelo
+            const providerSelect = document.getElementById('providerSelect');
+            const modelSelect = document.getElementById('modelSelect');
+            
+            // Tentar identificar o provedor pelo nome do modelo
+            let provider = 'openai'; // padrão
+            if (agent.model_name.includes('gemini')) {
+                provider = 'gemini';
+            } else if (agent.model_name.includes('openai/')) {
+                provider = 'openrouter';
+            }
+            
+            providerSelect.value = provider;
+            loadProviderModels().then(() => {
+                modelSelect.value = agent.model_name;
+            });
+            
+            new bootstrap.Modal(document.getElementById('agentModal')).show();
+        }
+
+        // Salvar agente
+        async function saveAgent() {
+            const form = document.getElementById('agentForm');
+            const formData = new FormData(form);
+            
+            const agentData = {
                 name: formData.get('name'),
                 description: formData.get('description'),
                 system_prompt: formData.get('system_prompt'),
                 model_name: formData.get('model_name'),
-                temperature: parseFloat(formData.get('temperature'))
+                temperature: parseFloat(formData.get('temperature')),
+                max_tokens: parseInt(formData.get('max_tokens')) || 1000,
+                memory: formData.get('memory') === 'on'
             };
-
+            
             try {
+                const url = currentAgentId ? `/api/v1/agents/${currentAgentId}` : '/api/v1/agents';
+                const method = currentAgentId ? 'PUT' : 'POST';
+                
                 const response = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(agentData)
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Erro desconhecido ao salvar');
-                }
                 
-                hideForm();
-                loadAgents(); // Recarrega a lista após o sucesso
+                if (response.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('agentModal')).hide();
+                    loadAgents();
+                    loadDashboardStats();
+                    
+                    const message = currentAgentId ? 'Agente atualizado com sucesso!' : 'Agente criado com sucesso!';
+                    alert(message);
+                } else {
+                    const error = await response.json();
+                    alert('Erro: ' + error.error);
+                }
             } catch (error) {
                 console.error('Erro ao salvar agente:', error);
-                alert(`Erro: ${error.message}`);
+                alert('Erro ao salvar agente');
             }
-        });
+        }
 
-        // Deleção com confirmação
-        function confirmDelete(agentId, agentName) {
-            document.getElementById('confirmMessage').innerText = `Tem certeza que deseja deletar o agente "${agentName}"? Esta ação não pode ser desfeita.`;
-            confirmCallback = async () => {
-                try {
-                    const response = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
-                    if (!response.ok) throw new Error('Falha ao deletar');
-                    loadAgents(); // Recarrega a lista
-                } catch (error) {
-                    alert('Erro ao deletar agente.');
+        // Deletar agente
+        async function deleteAgent(agentId) {
+            if (!confirm('Tem certeza que deseja deletar este agente?')) return;
+            
+            try {
+                const response = await fetch(`/api/v1/agents/${agentId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadAgents();
+                    loadDashboardStats();
+                    alert('Agente deletado com sucesso!');
+                } else {
+                    const error = await response.json();
+                    alert('Erro: ' + error.error);
                 }
-                confirmModal.hide();
-            };
-            confirmModal.show();
+            } catch (error) {
+                console.error('Erro ao deletar agente:', error);
+                alert('Erro ao deletar agente');
+            }
         }
 
-        document.getElementById('confirmButton').addEventListener('click', () => {
-            if (confirmCallback) confirmCallback();
-        });
+        // Ver agente
+        function viewAgent(agentId) {
+            window.location.href = `/agent/${agentId}`;
+        }
 
-        // Atualizar valor do slider de temperatura
+        // Atualizar valor da temperatura
         document.getElementById('temperature').addEventListener('input', function() {
-            document.getElementById('tempValue').innerText = this.value;
+            document.getElementById('tempValue').textContent = this.value;
         });
-        
-        function saveAsTemplate() {
-            alert('Funcionalidade de template será implementada em breve!');
-        }
-
-        // Carregar agentes ao iniciar a página
-        document.addEventListener('DOMContentLoaded', loadAgents);
     </script>
 </body>
 </html> 
