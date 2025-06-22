@@ -91,4 +91,27 @@ chromadb
 beautifulsoup4
 
 # Adicionado para conexão com PostgreSQL e gerenciamento de .env
-playwright 
+playwright
+
+# === NOVAS DEPENDÊNCIAS - GERAÇÃO DE DOCUMENTOS JURÍDICOS ===
+# FastAPI para APIs de geração de documentos
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Geração de documentos Word/PDF
+jinja2>=3.1.2
+python-docx>=0.8.11
+docx2pdf>=0.1.8  # Windows only - conversão DOCX para PDF
+
+# Autenticação e segurança para APIs
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.6
+
+# Orquestração de agentes
+crewai>=0.1.0
+
+# Storage avançado (opcional)
+boto3>=1.29.0  # Para S3 se necessário
+
+# Templates e validação
+pydantic>=2.5.0 
