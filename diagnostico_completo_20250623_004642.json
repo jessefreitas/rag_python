@@ -1,0 +1,95 @@
+{
+  "timestamp": "2025-06-23T00:46:35.455524",
+  "provedores": {
+    "openai": {
+      "env_var": "OPENAI_API_KEY",
+      "configurado": true,
+      "modelos_suportados": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-4",
+        "gpt-3.5-turbo"
+      ]
+    },
+    "google": {
+      "env_var": "GOOGLE_GEMINI_API_KEY",
+      "configurado": true,
+      "modelos_suportados": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-pro"
+      ]
+    },
+    "openrouter": {
+      "env_var": "OPENROUTER_API_KEY",
+      "configurado": true,
+      "modelos_suportados": [
+        "openai/gpt-4o",
+        "anthropic/claude-3.5-sonnet",
+        "meta-llama/llama-3.1-405b-instruct"
+      ]
+    },
+    "deepseek": {
+      "env_var": "DEEPSEEK_API_KEY",
+      "configurado": true,
+      "modelos_suportados": [
+        "deepseek-chat",
+        "deepseek-coder",
+        "deepseek-math"
+      ]
+    }
+  },
+  "postgresql": {
+    "conectado": true,
+    "config": {
+      "host": "db.fwzztbgmzxruqmtmafhe.supabase.co",
+      "port": "5432",
+      "database": "postgres",
+      "user": "postgres",
+      "password_set": true
+    },
+    "extensoes": [
+      "uuid-ossp",
+      "vector"
+    ],
+    "tabelas": [
+      "agentes",
+      "conversations",
+      "document_chunks",
+      "documents",
+      "llm_responses"
+    ],
+    "estatisticas": {
+      "agentes": 1,
+      "conversations": 3,
+      "document_chunks": 1,
+      "documents": 1,
+      "llm_responses": 3
+    },
+    "vector_extension": true
+  },
+  "embeddings": {
+    "disponivel": true,
+    "modelo": "text-embedding-3-small",
+    "dimensoes": 1536,
+    "teste_realizado": true
+  },
+  "dependencias": {
+    "streamlit": "✅ Instalada",
+    "openai": "✅ Instalada",
+    "psycopg2": "✅ Instalada",
+    "chromadb": "✅ Instalada",
+    "langchain": "✅ Instalada",
+    "python-dotenv": "❌ Não encontrada",
+    "requests": "✅ Instalada"
+  },
+  "arquivos_core": {
+    "llm_providers.py": "✅ Existe (16862 bytes)",
+    "database.py": "✅ Existe (2309 bytes)",
+    "vector_store.py": "✅ Existe (17687 bytes)",
+    "app_completo_unificado.py": "✅ Existe (118328 bytes)",
+    "agent_system.py": "✅ Existe (8298 bytes)",
+    "requirements.txt": "✅ Existe (2488 bytes)"
+  }
+}

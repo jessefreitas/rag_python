@@ -1,0 +1,8 @@
+{
+  "openai": {
+    "status": "sucesso",
+    "modelo_testado": "gpt-4-0613",
+    "resposta": "Inteligência Artificial é um ramo da ciência da computação que visa criar sistemas e máquinas capaze...",
+    "tempo_resposta": "N/A"
+  }
+}

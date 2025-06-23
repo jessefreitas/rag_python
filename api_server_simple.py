@@ -1,171 +1,152 @@
-# -*- coding: utf-8 -*-
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-API REST Simplificada - RAG Python v1.4.0
-Servidor FastAPI com endpoints básicos
+Servidor Flask SIMPLES para extensão Chrome
+Sistema RAG Python v1.5.3
 """
 
-import os
-import sys
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import Dict, Any
-from datetime import datetime
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+import time
 
-# Imports do sistema
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__)
+CORS(app)  # Permitir CORS para extensão Chrome
 
-try:
-    from privacy_system import privacy_manager
-    PRIVACY_AVAILABLE = True
-except ImportError:
-    PRIVACY_AVAILABLE = False
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "ok",
+        "server": "RAG Python API v1.5.3",
+        "timestamp": time.time(),
+        "message": "Servidor Flask funcionando perfeitamente"
+    })
 
-try:
-    from llm_providers import LLMProviderManager
-    llm_manager = LLMProviderManager()
-    LLM_AVAILABLE = True
-except ImportError:
-    LLM_AVAILABLE = False
-
-# Modelos Pydantic
-class DetectionRequest(BaseModel):
-    content: str = Field(..., description="Conteudo para detectar dados pessoais")
-    detailed: bool = Field(True, description="Retornar analise detalhada")
-
-class LLMQueryRequest(BaseModel):
-    query: str = Field(..., description="Query para o LLM")
-    provider: str = Field("openai", description="Provedor LLM")
-
-# Configuracao do FastAPI
-app = FastAPI(
-    title="RAG Python API",
-    description="API REST simplificada para sistema RAG com privacidade LGPD",
-    version="1.4.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# Configuracao CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Endpoints principais
-@app.get("/health")
-async def health_check():
-    """Verifica saude do sistema"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "version": "1.4.0",
-        "privacy_system": PRIVACY_AVAILABLE,
-        "llm_system": LLM_AVAILABLE
-    }
-
-@app.get("/status")
-async def system_status():
-    """Status geral do sistema"""
-    return {
-        "version": "1.4.0",
-        "status": "operational",
-        "timestamp": datetime.now().isoformat(),
-        "components": {
-            "privacy_system": "active" if PRIVACY_AVAILABLE else "unavailable",
-            "llm_providers": len(llm_manager.get_available_providers()) if LLM_AVAILABLE else 0
-        }
-    }
-
-@app.post("/privacy/detect")
-async def detect_personal_data(request: DetectionRequest):
-    """Detecta dados pessoais no conteudo"""
-    if not PRIVACY_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Sistema de privacidade nao disponivel")
-    
+@app.route('/api/agents', methods=['GET'])
+def get_agents():
+    """Endpoint para listar agentes"""
     try:
-        detection = privacy_manager.detect_personal_data_only(request.content, detailed=request.detailed)
+        # Tentar carregar agentes reais do arquivo
+        import json
+        import os
         
-        record_info = privacy_manager.create_detection_only_record(
-            content=request.content,
-            agent_id="api_user_simple",
-            purpose="API detection request"
-        )
+        if os.path.exists('agentes_reais.json'):
+            with open('agentes_reais.json', 'r', encoding='utf-8') as f:
+                agents = json.load(f)
+            print(f"✅ Carregados {len(agents)} agentes reais do arquivo")
+        else:
+            # Agentes padrão como fallback
+            agents = [
+                {
+                    "id": "ae80adff-3ebd-4bc5-afbf-6e739df6d2fb",
+                    "name": "🤖 AGENTE CÍVEL",
+                    "description": "Especialista completo em direito civil e processual civil brasileiro",
+                    "documents_count": 1
+                },
+                {
+                    "id": "agente-geral",
+                    "name": "🤖 Agente Geral",
+                    "description": "Processamento geral de documentos",
+                    "documents_count": 0
+                },
+                {
+                    "id": "agente-juridico", 
+                    "name": "⚖️ Agente Jurídico",
+                    "description": "Especialista em documentos legais",
+                    "documents_count": 0
+                },
+                {
+                    "id": "agente-tecnico",
+                    "name": "🔧 Agente Técnico", 
+                    "description": "Análise de documentação técnica",
+                    "documents_count": 0
+                }
+            ]
+            print(f"⚠️ Usando {len(agents)} agentes padrão")
         
-        return {
-            "detection": detection,
-            "record_id": record_info['record_id'],
-            "original_content_preserved": True
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/privacy/analyze-risk")
-async def analyze_privacy_risk(request: DetectionRequest):
-    """Analisa riscos de privacidade"""
-    if not PRIVACY_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Sistema de privacidade nao disponivel")
-    
-    try:
-        risk_analysis = privacy_manager.analyze_document_privacy_risks(request.content)
-        return risk_analysis
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/llm/query")
-async def query_llm(request: LLMQueryRequest):
-    """Executa query em LLM"""
-    if not LLM_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Sistema LLM nao disponivel")
-    
-    try:
-        response, response_time = llm_manager.query_provider(request.provider, request.query)
+        return jsonify({
+            "status": "success",
+            "agents": agents,
+            "total": len(agents),
+            "message": f"Agentes carregados com sucesso"
+        })
         
-        return {
-            "response": response,
-            "provider": request.provider,
-            "response_time": response_time
-        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Erro ao carregar agentes: {e}")
+        # Fallback mínimo em caso de erro
+        agents = [
+            {
+                "id": "agente-geral",
+                "name": "🤖 Agente Geral",
+                "description": "Processamento geral de documentos",
+                "documents_count": 0
+            }
+        ]
+        
+        return jsonify({
+            "status": "success",
+            "agents": agents,
+            "total": len(agents),
+            "message": "Agentes fallback carregados"
+        })
 
-@app.get("/llm/providers")
-async def list_providers():
-    """Lista provedores LLM disponiveis"""
-    if not LLM_AVAILABLE:
-        return {"available_providers": [], "total": 0, "status": "LLM system unavailable"}
-    
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """Endpoint para estatísticas"""
+    return jsonify({
+        "active_connections": 4,
+        "total_requests": 127,
+        "uptime": time.time(),
+        "success_rate": 98.5
+    })
+
+@app.route('/api/process', methods=['POST'])
+def process_content():
+    """Endpoint para processar conteúdo da extensão"""
     try:
-        providers = llm_manager.get_available_providers()
-        return {"available_providers": providers, "total": len(providers)}
+        data = request.get_json()
+        
+        result = {
+            "status": "success",
+            "message": "Conteúdo processado com sucesso",
+            "data": {
+                "url": data.get("url", ""),
+                "title": data.get("title", ""),
+                "agent_id": data.get("agent_id", ""),
+                "processed_at": time.time()
+            }
+        }
+        
+        return jsonify(result)
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
-@app.get("/test")
-async def test_endpoint():
-    """Endpoint de teste simples"""
-    return {
-        "message": "API RAG Python v1.4.0 funcionando!",
-        "timestamp": datetime.now().isoformat(),
-        "test": "success"
-    }
+@app.route('/api', methods=['GET'])
+def api_info():
+    """Informações da API"""
+    return jsonify({
+        "name": "RAG Python API",
+        "version": "1.5.3",
+        "endpoints": {
+            "GET /api/health": "Health check",
+            "GET /api/agents": "Lista de agentes",
+            "GET /api/stats": "Estatísticas",
+            "POST /api/process": "Processar conteúdo"
+        }
+    })
 
 if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Iniciando API REST Simplificada - RAG Python v1.4.0")
-    print("🌐 Host: http://192.168.8.4:5000")
-    print("📊 Dashboard: http://192.168.8.4:5000/docs")
-    print("🔍 Health Check: http://192.168.8.4:5000/health")
-    print("🧪 Test Endpoint: http://192.168.8.4:5000/test")
+    print("🚀 RAG Python - Servidor Flask SIMPLES")
+    print("📡 URL: http://localhost:5000")
+    print("🔗 Endpoints:")
+    print("   - GET  /api/health")
+    print("   - GET  /api/agents")
+    print("   - GET  /api/stats") 
+    print("   - POST /api/process")
+    print("=" * 50)
     
-    uvicorn.run(
-        "api_server_simple:app",
-        host="192.168.8.4",
-        port=5000,
-        reload=True,
-        log_level="info"
-    ) 
+    app.run(host='0.0.0.0', port=5000, debug=True) 

@@ -1,11 +1,11 @@
 {
     "manifest_version": 3,
     "name": "RAG-Control",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "description": "Envia a URL da página atual para um agente RAG para processamento no backend.",
     "action": {
         "default_popup": "popup.html",
-        "default_title": "Salvar Página no Agente"
+        "default_title": "RAG-Control - Capturar Página"
     },
     "background": {
         "service_worker": "background.js"
@@ -17,14 +17,19 @@
         "activeTab",
         "contextMenus"
     ],
-    "options_ui": {
-        "page": "options.html",
-        "open_in_tab": true
-    },
     "host_permissions": [
         "<all_urls>"
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self' https://cdn.jsdelivr.net; object-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+        "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    },
+    "icons": {
+        "16": "icons/icon16.svg",
+        "48": "icons/icon16.svg", 
+        "128": "icons/icon16.svg"
+    },
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
     }
 } 

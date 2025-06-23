@@ -2,58 +2,26 @@
 Servidor de teste simples para verificar se o Flask está funcionando
 """
 
-from flask import Flask, render_template_string
+from flask import Flask, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
-@app.route('/')
-def index():
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Teste - Sistema RAG</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 800px; margin: 0 auto; }
-            .card { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
-            .btn { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🤖 Sistema Web de Agentes RAG</h1>
-            <p>Servidor funcionando corretamente!</p>
-            
-            <div class="card">
-                <h3>Status do Sistema</h3>
-                <p>✅ Servidor Flask rodando</p>
-                <p>✅ Templates funcionando</p>
-                <p>✅ Rotas configuradas</p>
-            </div>
-            
-            <div class="card">
-                <h3>Próximos Passos</h3>
-                <p>1. Verificar se as dependências estão instaladas</p>
-                <p>2. Configurar o sistema completo</p>
-                <p>3. Testar criação de agentes</p>
-            </div>
-            
-            <a href="/test" class="btn">Testar Rota</a>
-        </div>
-    </body>
-    </html>
-    """)
+@app.route('/api/health')
+def health():
+    return jsonify({"status": "ok", "message": "Servidor funcionando"})
 
-@app.route('/test')
-def test():
-    return "✅ Rota de teste funcionando!"
-
-@app.route('/api/test')
-def api_test():
-    return {"status": "success", "message": "API funcionando!"}
+@app.route('/api/agents')
+def agents():
+    return jsonify({
+        "status": "success",
+        "agents": [
+            {"id": "geral", "name": "🤖 Agente Geral", "documents_count": 0},
+            {"id": "juridico", "name": "⚖️ Agente Jurídico", "documents_count": 15}
+        ]
+    })
 
 if __name__ == '__main__':
-    print("🚀 Iniciando servidor de teste...")
-    print("📡 Acesse: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    print("🚀 Servidor teste na porta 5000")
+    app.run(host='localhost', port=5000, debug=True) 

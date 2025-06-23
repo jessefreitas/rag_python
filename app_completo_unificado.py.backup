@@ -25,22 +25,9 @@ from privacy_system import privacy_manager
 from vector_store import VectorStore
 from database import Database
 
-# Importar o novo gerenciador de modelos
-try:
-    from llm_models_config import models_manager
-except ImportError:
-    models_manager = None
-    logger.warning("Módulo llm_models_config não encontrado")
-
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Interceptar requisições de API antes de qualquer coisa
-try:
-    import api_middleware
-except:
-    pass
 
 # Configuração da página
 st.set_page_config(
@@ -792,7 +779,6 @@ class RAGSystemUnified:
     def _generate_embedding(self, text: str) -> List[float]:
         """Gera embedding para o texto (simulado)"""
         try:
-            import random
             # Em produção, usar OpenAI embeddings ou similar
             # Por enquanto, retornar embedding simulado
             return [random.random() for _ in range(1536)]  # Dimensão do text-embedding-3-small
@@ -843,60 +829,60 @@ class RAGSystemUnified:
             return False
     
     def get_available_models_by_provider(self) -> Dict[str, List[str]]:
-        """Retorna modelos disponíveis APENAS para provedores configurados"""
+        """Retorna modelos disponíveis para cada provedor LLM"""
         
         # Verificar quais provedores estão realmente configurados
         configured_providers = []
         if os.getenv('OPENAI_API_KEY'):
             configured_providers.append('openai')
-        if os.getenv('GOOGLE_API_KEY') or os.getenv('GOOGLE_GEMINI_API_KEY'):
+        if os.getenv('GOOGLE_API_KEY'):
             configured_providers.append('google')
         if os.getenv('OPENROUTER_API_KEY'):
             configured_providers.append('openrouter')
         if os.getenv('DEEPSEEK_API_KEY'):
             configured_providers.append('deepseek')
         
-        # Tentar usar o novo sistema de modelos
-        try:
-            from llm_models_config import models_manager
-            available = models_manager.get_provider_models_simple()
-            # Filtrar apenas provedores configurados
-            filtered = {k: v for k, v in available.items() if k in configured_providers}
-            return filtered if filtered else {'openai': ['gpt-3.5-turbo']}  # Fallback mínimo
-        except ImportError:
-            logger.warning("Sistema de modelos avançado não disponível, usando fallback")
-        
-        # Fallback SEGURO - apenas modelos testados
-        safe_models = {
+        models = {
             'openai': [
                 'gpt-4o',
                 'gpt-4o-mini', 
                 'gpt-4-turbo',
                 'gpt-4',
-                'gpt-3.5-turbo'
+                'gpt-3.5-turbo',
+                'gpt-3.5-turbo-16k'
+            ],
+            'google': [
+                'gemini-1.5-pro',
+                'gemini-1.5-flash',
+                'gemini-pro',
+                'gemini-pro-vision'
+            ],
+            'openrouter': [
+                'openai/gpt-4o',
+                'openai/gpt-4o-mini',
+                'anthropic/claude-3.5-sonnet',
+                'anthropic/claude-3-haiku',
+                'meta-llama/llama-3.1-405b-instruct',
+                'meta-llama/llama-3.1-70b-instruct',
+                'google/gemini-pro-1.5',
+                'mistralai/mixtral-8x7b-instruct'
+            ],
+            'deepseek': [
+                'deepseek-chat',
+                'deepseek-coder',
+                'deepseek-math'
             ]
         }
-        
-        # Só adicionar outros provedores se realmente configurados
-        if 'google' in configured_providers:
-            safe_models['google'] = ['gemini-1.5-flash', 'gemini-pro']
-        
-        if 'openrouter' in configured_providers:
-            safe_models['openrouter'] = ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet']
-        
-        if 'deepseek' in configured_providers:
-            safe_models['deepseek'] = ['deepseek-chat', 'deepseek-coder']
         
         # Retornar apenas modelos de provedores configurados
         available_models = {}
         for provider in configured_providers:
-            if provider in safe_models:
-                available_models[provider] = safe_models[provider]
+            if provider in models:
+                available_models[provider] = models[provider]
         
-        # Fallback de emergência - sempre incluir OpenAI se não houver nenhum
-        if not available_models:
-            available_models['openai'] = ['gpt-3.5-turbo']
-            logger.warning("Nenhum provedor configurado, usando fallback OpenAI")
+        # Se nenhum provedor estiver configurado, retornar OpenAI como fallback
+        if not available_models and 'openai' in models:
+            available_models['openai'] = models['openai']
         
         return available_models
 
@@ -916,14 +902,13 @@ def main():
                 unsafe_allow_html=True)
     
     # Tabs principais
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "🏠 Dashboard",
         "💬 Chat RAG", 
         "🤖 Agentes",
         "🔄 Multi-LLM",
         "🔒 Privacidade",
         "📁 Documentos",
-        "🔌 Conexão",
         "⚙️ Configurações"
     ])
     
@@ -946,9 +931,6 @@ def main():
         documents_interface(rag_system)
     
     with tab7:
-        connection_interface(rag_system)
-    
-    with tab8:
         settings_interface(rag_system)
 
 def dashboard_interface(rag_system):
@@ -2652,199 +2634,6 @@ def settings_interface(rag_system):
                 st.info(f"📊 Importado de: {config_data.get('export_date', 'N/A')}")
             except Exception as e:
                 st.error(f"❌ Erro ao importar configurações: {str(e)}")
-
-def connection_interface(rag_system):
-    """Interface de monitoramento de conexões da extensão Chrome"""
-    
-    st.header("🔌 Monitoramento de Conexões")
-    st.markdown("Dashboard para monitorar conexões da extensão Chrome RAG-Control")
-    
-    try:
-        from extension_api_endpoints import extension_api
-        from streamlit_api_handler import render_api_documentation
-        
-        # Tabs da interface de conexão
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📊 Dashboard",
-            "🔍 Conexões Ativas", 
-            "🧪 Testes",
-            "📖 API Docs"
-        ])
-        
-        with tab1:
-            st.subheader("📊 Métricas em Tempo Real")
-            
-            # Obter estatísticas
-            stats = extension_api.get_connection_stats()
-            
-            # Métricas principais
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric(
-                    "🔗 Conexões Ativas",
-                    stats['active_connections'],
-                    help="Número de conexões ativas da extensão"
-                )
-            
-            with col2:
-                st.metric(
-                    "📊 Total de Requisições",
-                    stats['total_requests'],
-                    help="Total de requisições processadas"
-                )
-            
-            with col3:
-                success_rate = stats.get('success_rate', 0)
-                st.metric(
-                    "✅ Taxa de Sucesso",
-                    f"{success_rate}%",
-                    help="Porcentagem de requisições bem-sucedidas"
-                )
-            
-            with col4:
-                uptime_hours = stats['uptime'] / 3600
-                st.metric(
-                    "⏱️ Uptime",
-                    f"{uptime_hours:.1f}h",
-                    help="Tempo que o servidor está ativo"
-                )
-            
-            # Status do servidor
-            st.markdown("---")
-            st.subheader("🖥️ Status do Servidor")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.success("✅ **Servidor RAG Ativo**")
-                st.info("🌐 **URL:** http://localhost:8501")
-                st.info("📡 **Porta:** 8501")
-                
-            with col2:
-                if stats['last_activity']:
-                    st.success(f"🕒 **Última Atividade:** {stats['last_activity']}")
-                else:
-                    st.warning("⚠️ **Nenhuma atividade recente**")
-                
-                st.info(f"🔧 **Versão:** RAG Python v1.5.3")
-        
-        with tab2:
-            st.subheader("🔍 Lista de Conexões Ativas")
-            
-            connections = stats.get('connections', [])
-            
-            if connections:
-                st.success(f"✅ {len(connections)} conexão(ões) ativa(s)")
-                
-                # Tabela de conexões
-                for i, conn in enumerate(connections):
-                    with st.expander(f"🔗 Conexão {conn['id']} - {conn['requests']} requisições"):
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.write(f"**ID:** {conn['id']}")
-                            st.write(f"**Requisições:** {conn['requests']}")
-                        
-                        with col2:
-                            duration_min = conn['duration'] / 60
-                            st.write(f"**Duração:** {duration_min:.1f} min")
-                            st.write(f"**Última Atividade:** {conn['last_activity']}")
-                        
-                        with col3:
-                            st.success("🟢 Ativa")
-                            if st.button(f"🔄 Atualizar {conn['id']}", key=f"refresh_{i}"):
-                                st.rerun()
-            else:
-                st.warning("⚠️ Nenhuma conexão ativa no momento")
-                st.markdown("""
-                **Para conectar a extensão:**
-                1. Instale a extensão Chrome RAG-Control
-                2. Configure a URL: `http://localhost:8501`
-                3. Teste a conexão na extensão
-                """)
-        
-        with tab3:
-            st.subheader("🧪 Testes de Conectividade")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("🏥 Testar Health Check", use_container_width=True):
-                    with st.spinner("Testando..."):
-                        result = extension_api.get_health_status()
-                        if result['status'] == 'connected':
-                            st.success("✅ Health check bem-sucedido!")
-                            st.json(result)
-                        else:
-                            st.error("❌ Falha no health check")
-                            st.json(result)
-            
-            with col2:
-                if st.button("👥 Testar Listagem de Agentes", use_container_width=True):
-                    with st.spinner("Carregando agentes..."):
-                        result = extension_api.get_agents_list()
-                        if result['status'] == 'success':
-                            st.success(f"✅ {result['total']} agente(s) encontrado(s)")
-                            for agent in result['agents']:
-                                st.write(f"- **{agent['name']}** ({agent['type']}) - {agent['documents_count']} docs")
-                        else:
-                            st.error("❌ Erro ao carregar agentes")
-                            st.json(result)
-            
-            # Teste de URL completa
-            st.markdown("---")
-            st.subheader("🔗 URLs de Teste")
-            
-            base_url = "http://localhost:8501"
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.code(f"{base_url}/?api=health")
-                if st.button("🏥 Abrir Health", key="open_health"):
-                    st.markdown(f"[🔗 Health Check]({base_url}/?api=health)")
-            
-            with col2:
-                st.code(f"{base_url}/?api=agents")
-                if st.button("👥 Abrir Agentes", key="open_agents"):
-                    st.markdown(f"[🔗 Lista Agentes]({base_url}/?api=agents)")
-            
-            with col3:
-                st.code(f"{base_url}/?api=stats")
-                if st.button("📊 Abrir Stats", key="open_stats"):
-                    st.markdown(f"[🔗 Estatísticas]({base_url}/?api=stats)")
-            
-            # Estatísticas detalhadas
-            st.markdown("---")
-            st.subheader("📊 Estatísticas Detalhadas")
-            
-            if st.button("📈 Mostrar JSON Completo"):
-                st.json(stats)
-        
-        with tab4:
-            render_api_documentation()
-            
-    except ImportError as e:
-        st.error(f"❌ Módulo de API da extensão não encontrado: {e}")
-        st.markdown("""
-        ### 🔧 Configuração Necessária
-        
-        Para usar esta funcionalidade, certifique-se de que os arquivos estão presentes:
-        - `extension_api_endpoints.py`
-        - `streamlit_api_handler.py`
-        
-        **Funcionalidades da Aba Conexão:**
-        - 📊 Monitoramento de conexões da extensão Chrome
-        - 📈 Estatísticas de uso em tempo real
-        - 🔍 Lista de conexões ativas
-        - 🧪 Testes de conectividade
-        - 📖 Documentação da API
-        """)
-    
-    except Exception as e:
-        st.error(f"❌ Erro na interface de conexão: {e}")
-        st.info("🔄 Tente recarregar a página")
 
 if __name__ == "__main__":
     main() 

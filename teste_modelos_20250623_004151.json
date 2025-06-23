@@ -1,0 +1,26 @@
+{
+  "openrouter": {
+    "status": "sucesso",
+    "modelo_testado": "mistralai/mistral-small-3.2-24b-instruct:free",
+    "resposta": "A inteligência artificial (IA) é a capacidade de sistemas computacionais realizarem tarefas que norm...",
+    "tempo_resposta": "N/A"
+  },
+  "openai": {
+    "status": "sucesso",
+    "modelo_testado": "gpt-4-0613",
+    "resposta": "Inteligência artificial é uma área da ciência da computação que busca criar sistemas capazes de simu...",
+    "tempo_resposta": "N/A"
+  },
+  "gemini": {
+    "status": "sucesso",
+    "modelo_testado": "models/gemini-1.0-pro-vision-latest",
+    "resposta": "Inteligência artificial é a simulação de processos de inteligência humana por máquinas, especialment...",
+    "tempo_resposta": "N/A"
+  },
+  "deepseek": {
+    "status": "sucesso",
+    "modelo_testado": "deepseek-chat",
+    "resposta": "**\"Inteligência artificial é a capacidade de máquinas simularem a inteligência humana, aprendendo, r...",
+    "tempo_resposta": "N/A"
+  }
+}

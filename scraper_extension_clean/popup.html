@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG-Control</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            width: 400px;
+            min-height: 500px;
+            margin: 0;
+            padding: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #2c3e50;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.success {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-block {
+            width: 100%;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-muted {
+            color: #6c757d;
+        }
+        
+        .small {
+            font-size: 12px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .page-info {
+            background: #e9ecef;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+        
+        .page-url {
+            word-break: break-all;
+            font-size: 12px;
+            color: #495057;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 RAG-Control</h1>
+        <p class="small text-muted">Capturar página para processamento</p>
+    </div>
+
+    <!-- Status de conexão -->
+    <div id="status-bar" class="status loading">
+        <div class="loading-spinner"></div>
+        <span id="status-text">Verificando conexão...</span>
+    </div>
+
+    <!-- Estado de erro -->
+    <div id="error-state" class="card hidden">
+        <h3>❌ Erro de Conexão</h3>
+        <p id="error-message"></p>
+        <button id="retry-btn" class="btn btn-secondary btn-block">
+            🔄 Tentar Novamente
+        </button>
+    </div>
+
+    <!-- Estado principal -->
+    <div id="main-state" class="hidden">
+        <!-- Informações da página -->
+        <div class="card">
+            <h3>📄 Página Atual</h3>
+            <div class="page-info">
+                <div class="page-url" id="page-url">Carregando...</div>
+                <div class="small text-muted" id="page-title">Carregando título...</div>
+                <div class="small text-muted">
+                    Tamanho: <span id="content-size">0 KB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configurações -->
+        <div class="card">
+            <h3>⚙️ Configurações</h3>
+            
+            <div class="form-group">
+                <label for="agent-select" class="form-label">Agente</label>
+                <select id="agent-select" class="form-control">
+                    <option value="">Carregando agentes...</option>
+                </select>
+                <small class="text-muted">
+                    <span id="agent-count">0</span> agentes disponíveis
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="processing-mode" class="form-label">Modo de Processamento</label>
+                <select id="processing-mode" class="form-control">
+                    <option value="auto">Automático</option>
+                    <option value="url-only">Apenas URL</option>
+                    <option value="content-only">Apenas Conteúdo</option>
+                    <option value="smart">Inteligente</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="anonymize-data"> 
+                    Anonimizar dados (LGPD)
+                </label>
+            </div>
+        </div>
+
+        <!-- Ações -->
+        <div class="card">
+            <button id="save-button" class="btn btn-primary btn-block">
+                <span id="save-spinner" class="loading-spinner hidden"></span>
+                📥 <span id="save-button-text">Capturar Página</span>
+            </button>
+            
+            <div style="margin-top: 12px; display: flex; gap: 8px;">
+                <button id="analyze-btn" class="btn btn-secondary" style="flex: 1;">
+                    🔍 Analisar
+                </button>
+                <button id="dashboard-btn" class="btn btn-secondary" style="flex: 1;">
+                    📊 Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="card">
+            <h3>📊 Estatísticas</h3>
+            <div style="display: flex; justify-content: space-between; text-align: center;">
+                <div>
+                    <div style="font-weight: bold;" id="stat-requests">0</div>
+                    <small class="text-muted">Requisições</small>
+                </div>
+                <div>
+                    <div style="font-weight: bold;" id="stat-success">0%</div>
+                    <small class="text-muted">Sucesso</small>
+                </div>
+                <div>
+                    <div style="font-weight: bold;" id="stat-time">0ms</div>
+                    <small class="text-muted">Tempo</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast de sucesso -->
+    <div id="success-toast" class="hidden" style="position: fixed; top: 20px; right: 20px; background: #d1e7dd; color: #0f5132; padding: 12px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        ✅ Página capturada com sucesso!
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
