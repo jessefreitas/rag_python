@@ -236,42 +236,165 @@ class RAGSystemUnified:
             'temperature': 0.7,
             'max_tokens': 1000
         }
+        self.connection_pool = self._create_connection_pool()
+        self._create_tables()
     
-    def query_with_agent(self, question: str, agent_id: str = None) -> Dict:
-        """Processa pergunta com agente específico"""
+    def _create_connection_pool(self):
+        """Cria pool de conexões com PostgreSQL"""
         try:
+            return psycopg2.pool.SimpleConnectionPool(
+                1, 20,
+                host=os.getenv('POSTGRES_HOST', 'localhost'),
+                database=os.getenv('POSTGRES_DB', 'rag_system'),
+                user=os.getenv('POSTGRES_USER', 'postgres'),
+                password=os.getenv('POSTGRES_PASSWORD', 'postgres'),
+                port=os.getenv('POSTGRES_PORT', '5432')
+            )
+        except Exception as e:
+            logger.error(f"Erro ao criar pool de conexões: {e}")
+            return None
+    
+    def _create_tables(self):
+        """Cria tabelas necessárias se não existirem"""
+        try:
+            create_agents_table = """
+                CREATE TABLE IF NOT EXISTS agentes (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    agent_type VARCHAR(100),
+                    system_prompt TEXT NOT NULL,
+                    model VARCHAR(100) DEFAULT 'gpt-3.5-turbo',
+                    temperature DECIMAL(3,2) DEFAULT 0.7,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """
+            
+            create_documents_table = """
+                CREATE TABLE IF NOT EXISTS documents (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(255) NOT NULL,
+                    content TEXT,
+                    file_type VARCHAR(50),
+                    file_size INTEGER,
+                    agent_id UUID REFERENCES agentes(id) ON DELETE CASCADE,
+                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed BOOLEAN DEFAULT FALSE,
+                    vector_store_id VARCHAR(255)
+                );
+            """
+            
+            create_index = """
+                CREATE INDEX IF NOT EXISTS idx_documents_agent_id ON documents(agent_id);
+                CREATE INDEX IF NOT EXISTS idx_documents_upload_date ON documents(upload_date);
+            """
+            
+            self._execute_query(create_agents_table)
+            self._execute_query(create_documents_table)
+            self._execute_query(create_index)
+            
+            logger.info("Tabelas criadas/verificadas com sucesso")
+            
+        except Exception as e:
+            logger.error(f"Erro ao criar tabelas: {e}")
+    
+    def query_with_agent(self, question: str, agent_id: str = None, llm: str = None) -> Dict:
+        """Processa pergunta com agente específico e LLM escolhido"""
+        try:
+            import time
+            start_time = time.time()
+            
             agent = None
             if agent_id:
                 agent = self.agent_manager.get_agent_by_id(agent_id)
+            
+            # Recuperar documentos do agente
+            context_docs = self.get_agent_documents(agent_id) if agent_id else []
+            
+            # Preparar contexto dos documentos
+            context = ""
+            if context_docs:
+                context = "\n\nContexto dos documentos:\n"
+                for doc in context_docs[:3]:  # Limitar a 3 documentos mais relevantes
+                    context += f"- {doc.get('name', 'Documento')}: {doc.get('content', '')[:500]}...\n"
             
             # Preparar mensagens
             messages = []
             
             if agent:
+                system_prompt = agent['system_prompt']
+                if context:
+                    system_prompt += f"\n\nUse os seguintes documentos como referência quando relevante:{context}"
+                
                 messages.append({
                     "role": "system", 
-                    "content": agent['system_prompt']
+                    "content": system_prompt
+                })
+            elif context:
+                messages.append({
+                    "role": "system",
+                    "content": f"Você é um assistente inteligente. Use os seguintes documentos como referência quando relevante:{context}"
                 })
             
             messages.append({"role": "user", "content": question})
             
-            # Gerar resposta
-            model = agent['model'] if agent else self.settings['model_name']
-            # Converter Decimal para float se necessário
-            temperature = float(agent['temperature']) if agent else float(self.settings['temperature'])
+            # Determinar configurações
+            if agent:
+                model = agent['model']
+                temperature = float(agent['temperature'])
+            else:
+                model = self.settings['model_name']
+                temperature = float(self.settings['temperature'])
             
-            response = self.llm_manager.generate_response(
-                messages,
-                model=model,
-                temperature=temperature
-            )
-            
-            return {
-                'answer': response,
-                'agent_used': agent['name'] if agent else 'Sistema Padrão',
-                'model_used': model,
-                'success': True
-            }
+            # Gerar resposta usando LLM especificado
+            if llm:
+                result = self.llm_manager.generate_response(
+                    messages,
+                    provider_name=llm,
+                    model=model,
+                    temperature=temperature
+                )
+                
+                if result.get('success'):
+                    end_time = time.time()
+                    return {
+                        'answer': result['response'],
+                        'agent_used': agent['name'] if agent else 'Sistema Padrão',
+                        'model_used': result.get('model', model),
+                        'llm_used': llm,
+                        'response_time': round(end_time - start_time, 2),
+                        'documents_used': len(context_docs),
+                        'success': True
+                    }
+                else:
+                    return {
+                        'answer': f"Erro: {result.get('error', 'Erro desconhecido')}",
+                        'agent_used': agent['name'] if agent else 'Sistema Padrão',
+                        'model_used': model,
+                        'llm_used': llm,
+                        'response_time': 0,
+                        'documents_used': 0,
+                        'success': False
+                    }
+            else:
+                # Usar método legado
+                response = self.llm_manager.generate_response_old(
+                    messages,
+                    model=model,
+                    temperature=temperature
+                )
+                
+                end_time = time.time()
+                return {
+                    'answer': response,
+                    'agent_used': agent['name'] if agent else 'Sistema Padrão',
+                    'model_used': model,
+                    'llm_used': 'padrão',
+                    'response_time': round(end_time - start_time, 2),
+                    'documents_used': len(context_docs),
+                    'success': True
+                }
             
         except Exception as e:
             logger.error(f"Erro ao processar pergunta: {e}")
@@ -279,8 +402,56 @@ class RAGSystemUnified:
                 'answer': f"Erro: {str(e)}",
                 'agent_used': 'Erro',
                 'model_used': 'N/A',
+                'llm_used': llm or 'N/A',
+                'response_time': 0,
+                'documents_used': 0,
                 'success': False
             }
+    
+    def get_agent_documents(self, agent_id: str = None) -> List[Dict]:
+        """Recupera documentos associados a um agente específico"""
+        try:
+            if not agent_id:
+                # Retornar documentos da base geral
+                return [doc for doc in self.documents if not doc.get('agent_id')]
+            
+            # Buscar documentos no banco de dados PostgreSQL (usando schema correto)
+            query = """
+                SELECT d.id, d.file_name, d.source_type, d.content_hash, d.created_at, d.agent_id,
+                       COUNT(dc.id) as chunk_count
+                FROM documents d
+                LEFT JOIN document_chunks dc ON d.id = dc.document_id
+                WHERE d.agent_id = %s 
+                GROUP BY d.id, d.file_name, d.source_type, d.content_hash, d.created_at, d.agent_id
+                ORDER BY d.created_at DESC
+            """
+            
+            rows = self.agent_manager._execute_query(query, (agent_id,), fetch='all')
+            
+            if rows:
+                documents = []
+                for row in rows:
+                    documents.append({
+                        'id': str(row[0]),
+                        'name': row[1] or 'Documento sem nome',
+                        'file_type': row[2] or 'unknown',
+                        'content_hash': row[3],
+                        'upload_date': row[4],
+                        'agent_id': str(row[5]),
+                        'chunk_count': row[6] or 0
+                    })
+                return documents
+            else:
+                # Fallback para documentos em memória
+                return [doc for doc in self.documents if doc.get('agent_id') == agent_id]
+                
+        except Exception as e:
+            logger.error(f"Erro ao recuperar documentos do agente {agent_id}: {e}")
+            # Fallback para documentos em memória
+            if agent_id:
+                return [doc for doc in self.documents if doc.get('agent_id') == agent_id]
+            else:
+                return [doc for doc in self.documents if not doc.get('agent_id')]
     
     def multi_llm_compare(self, question: str, providers: List[str] = None) -> Dict:
         """Compara respostas de múltiplos LLMs"""
@@ -524,13 +695,37 @@ def chat_rag_interface(rag_system):
     """Interface do Chat RAG"""
     st.header("💬 Chat RAG Inteligente")
     
-    # Seleção de agente
-    agents = rag_system.agent_manager.get_all_agents()
-    agent_options = {"Sistema Padrão": None}
-    agent_options.update({agent['name']: agent['id'] for agent in agents})
+    # Configuração em duas colunas
+    col1, col2 = st.columns([1, 1])
     
-    selected_agent = st.selectbox("🤖 Selecionar Agente:", list(agent_options.keys()))
-    agent_id = agent_options[selected_agent]
+    with col1:
+        # Seleção de agente
+        agents = rag_system.agent_manager.get_all_agents()
+        agent_options = {"Sistema Padrão": None}
+        agent_options.update({agent['name']: agent['id'] for agent in agents})
+        
+        selected_agent = st.selectbox("🤖 Selecionar Agente:", list(agent_options.keys()))
+        agent_id = agent_options[selected_agent]
+    
+    with col2:
+        # Seleção de LLM
+        llm_options = {
+            "🤖 OpenAI (GPT)": "openai",
+            "🔍 Google Gemini": "google", 
+            "🌐 OpenRouter": "openrouter",
+            "🧠 DeepSeek": "deepseek"
+        }
+        
+        selected_llm_display = st.selectbox("🔧 Selecionar LLM:", list(llm_options.keys()))
+        selected_llm = llm_options[selected_llm_display]
+    
+    # Mostrar configuração atual
+    if agent_id:
+        agent = rag_system.agent_manager.get_agent_by_id(agent_id)
+        if agent:
+            st.info(f"🤖 **Agente:** {agent['name']} | **LLM:** {selected_llm_display} | **Documentos:** {len(rag_system.get_agent_documents(agent_id))} docs")
+    else:
+        st.info(f"🤖 **Sistema Padrão** | **LLM:** {selected_llm_display} | **Base:** Geral")
     
     # Histórico do chat
     if 'chat_history' not in st.session_state:
@@ -542,22 +737,12 @@ def chat_rag_interface(rag_system):
     with chat_container:
         for message in st.session_state.chat_history:
             if message['role'] == 'user':
-                st.markdown(f"""
-                <div class="chat-message user-message">
-                    <strong>👤 Você:</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
+                with st.chat_message("user"):
+                    st.write(message['content'])
             else:
-                st.markdown(f"""
-                <div class="chat-message assistant-message">
-                    <strong>🤖 {message.get('agent', 'Assistente')}:</strong><br>
-                    {message['content']}
-                    <div style="font-size: 0.8em; color: #666; margin-top: 0.5rem;">
-                        Modelo: {message.get('model', 'N/A')}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.chat_message("assistant"):
+                    st.write(message['content'])
+                    st.caption(f"🤖 {message.get('agent', 'Sistema')} | 🔧 {message.get('llm', 'N/A')} | ⚡ {message.get('response_time', 0):.2f}s")
     
     # Input de mensagem com suporte ao Enter
     user_input = st.chat_input("💭 Digite sua pergunta...")
@@ -572,30 +757,48 @@ def chat_rag_interface(rag_system):
         
         # Processar resposta
         with st.spinner("🤔 Pensando..."):
-            result = rag_system.query_with_agent(user_input, agent_id)
+            result = rag_system.query_with_agent(user_input, agent_id, selected_llm)
         
         # Adicionar resposta do assistente
         if result['success']:
             st.session_state.chat_history.append({
                 'role': 'assistant',
                 'content': result['answer'],
-                'agent': result['agent_used'],
-                'model': result['model_used']
+                'agent': result.get('agent_used', selected_agent),
+                'llm': selected_llm_display,
+                'response_time': result.get('response_time', 0)
             })
         else:
             st.session_state.chat_history.append({
                 'role': 'assistant',
-                'content': f"❌ Erro: {result['answer']}",
-                'agent': result['agent_used'],
-                'model': result['model_used']
+                'content': f"❌ Erro: {result.get('answer', 'Erro desconhecido')}",
+                'agent': result.get('agent_used', selected_agent),
+                'llm': selected_llm_display,
+                'response_time': 0
             })
         
         st.rerun()
     
-    # Botão adicional para limpar chat
-    if st.button("🗑️ Limpar Chat"):
-        st.session_state.chat_history = []
-        st.rerun()
+    # Botões de ação
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    with col1:
+        if st.button("🗑️ Limpar Chat"):
+            st.session_state.chat_history = []
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 Ver Documentos"):
+            if agent_id:
+                docs = rag_system.get_agent_documents(agent_id)
+                st.info(f"📚 {len(docs)} documentos na base do agente")
+                for doc in docs[:3]:  # Mostrar primeiros 3
+                    st.write(f"📄 {doc.get('name', 'Documento')}")
+            else:
+                st.info("📚 Base de documentos geral")
+    
+    with col3:
+        st.write("")  # Espaço
 
 def agents_interface(rag_system):
     """Interface de gerenciamento de agentes"""

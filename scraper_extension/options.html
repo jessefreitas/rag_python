@@ -3,27 +3,404 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - RAG-Control</title>
+    <title>Configurações - RAG-Control v1.5.1</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="style.css" rel="stylesheet">
 </head>
 <body class="options-page">
-    <div class="container">
-        <h2 class="mb-4">Configurações</h2>
-        <div id="status-message" class="alert d-none" role="alert"></div>
-        <div class="card">
-            <div class="card-body">
-                <form id="options-form">
-                    <div class="mb-3">
-                        <label for="api-url" class="form-label fw-bold">URL da API do Backend</label>
-                        <input type="url" class="form-control" id="api-url" placeholder="http://192.168.8.4:5000" required>
-                        <div class="form-text">Insira o endereço completo do seu servidor Flask.</div>
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h1 class="h3 mb-0"><i class="bi bi-gear-fill me-2"></i>RAG-Control v1.5.1</h1>
+                        <p class="text-muted mb-0">Configurações da Extensão Chrome</p>
                     </div>
-                    <button type="submit" class="btn btn-primary">Salvar Configurações</button>
-                </form>
+                    <div class="d-flex gap-2">
+                        <button id="test-connection" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-wifi"></i> Testar Conexão
+                        </button>
+                        <button id="reset-settings" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-arrow-clockwise"></i> Resetar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Message -->
+        <div id="status-message" class="alert d-none" role="alert"></div>
+
+        <!-- Connection Status -->
+        <div id="connection-status" class="row mb-4">
+            <div class="col-12">
+                <div class="card border-secondary">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center">
+                            <div id="status-indicator" class="me-3">
+                                <div class="spinner-border spinner-border-sm text-warning" role="status">
+                                    <span class="visually-hidden">Verificando...</span>
+                                </div>
+                            </div>
+                            <div>
+                                <h6 class="mb-0" id="status-title">Verificando conexão...</h6>
+                                <small class="text-muted" id="status-details">Aguarde...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-4" id="configTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-config" type="button" role="tab">
+                    <i class="bi bi-cloud-arrow-up me-1"></i>API & Servidor
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="agents-tab" data-bs-toggle="tab" data-bs-target="#agents-config" type="button" role="tab">
+                    <i class="bi bi-robot me-1"></i>Agentes
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="preferences-tab" data-bs-toggle="tab" data-bs-target="#preferences-config" type="button" role="tab">
+                    <i class="bi bi-sliders me-1"></i>Preferências
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced-config" type="button" role="tab">
+                    <i class="bi bi-tools me-1"></i>Avançado
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="configTabContent">
+            <!-- API Configuration -->
+            <div class="tab-pane fade show active" id="api-config" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-server me-2"></i>Configuração do Servidor</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="api-form">
+                                    <div class="mb-3">
+                                        <label for="api-url" class="form-label fw-bold">URL da API Backend</label>
+                                        <input type="url" class="form-control" id="api-url" placeholder="http://192.168.8.4:5000" required>
+                                        <div class="form-text">Endereço do servidor FastAPI (padrão: http://192.168.8.4:5000)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="streamlit-url" class="form-label fw-bold">URL do Streamlit</label>
+                                        <input type="url" class="form-control" id="streamlit-url" placeholder="http://localhost:8501">
+                                        <div class="form-text">Endereço da interface Streamlit (padrão: http://localhost:8501)</div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="timeout" class="form-label fw-bold">Timeout (segundos)</label>
+                                                <input type="number" class="form-control" id="timeout" min="5" max="120" value="30">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="retry-attempts" class="form-label fw-bold">Tentativas de Retry</label>
+                                                <input type="number" class="form-control" id="retry-attempts" min="1" max="5" value="3">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Endpoints Disponíveis</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="endpoints-list">
+                                    <div class="d-flex justify-content-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agents Configuration -->
+            <div class="tab-pane fade" id="agents-config" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-robot me-2"></i>Agente Padrão</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="agent-form">
+                                    <div class="mb-3">
+                                        <label for="default-agent" class="form-label fw-bold">Selecionar Agente</label>
+                                        <select class="form-select" id="default-agent">
+                                            <option value="">Carregando agentes...</option>
+                                        </select>
+                                        <div class="form-text">Agente usado por padrão para processar páginas</div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="processing-mode" class="form-label fw-bold">Modo de Processamento</label>
+                                        <select class="form-select" id="processing-mode">
+                                            <option value="auto">Automático (URL + Conteúdo)</option>
+                                            <option value="url-only">Apenas URL</option>
+                                            <option value="content-only">Apenas Conteúdo</option>
+                                            <option value="smart">Inteligente (Detectar tipo)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="auto-process">
+                                        <label class="form-check-label" for="auto-process">
+                                            Processar automaticamente ao clicar
+                                        </label>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-list me-2"></i>Agentes Disponíveis</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="agents-list" style="max-height: 300px; overflow-y: auto;">
+                                    <div class="d-flex justify-content-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preferences Configuration -->
+            <div class="tab-pane fade" id="preferences-config" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-ui-checks me-2"></i>Interface</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="preferences-form">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Tema</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="theme" id="theme-dark" value="dark" checked>
+                                            <label class="form-check-label" for="theme-dark">
+                                                <i class="bi bi-moon-fill me-1"></i>Escuro
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="theme" id="theme-light" value="light">
+                                            <label class="form-check-label" for="theme-light">
+                                                <i class="bi bi-sun-fill me-1"></i>Claro
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="theme" id="theme-auto" value="auto">
+                                            <label class="form-check-label" for="theme-auto">
+                                                <i class="bi bi-circle-half me-1"></i>Automático
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="show-notifications">
+                                        <label class="form-check-label" for="show-notifications">
+                                            Mostrar notificações
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="show-success-popup">
+                                        <label class="form-check-label" for="show-success-popup">
+                                            Exibir popup de sucesso
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="context-menu">
+                                        <label class="form-check-label" for="context-menu">
+                                            Adicionar ao menu de contexto
+                                        </label>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Privacidade & Segurança</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="privacy-form">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="anonymize-data">
+                                        <label class="form-check-label" for="anonymize-data">
+                                            Anonimizar dados pessoais (LGPD)
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="encrypt-storage">
+                                        <label class="form-check-label" for="encrypt-storage">
+                                            Criptografar dados locais
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="clear-on-close">
+                                        <label class="form-check-label" for="clear-on-close">
+                                            Limpar cache ao fechar navegador
+                                        </label>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="data-retention" class="form-label fw-bold">Retenção de Dados (dias)</label>
+                                        <input type="number" class="form-control" id="data-retention" min="1" max="365" value="30">
+                                        <div class="form-text">Tempo para manter dados processados</div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Configuration -->
+            <div class="tab-pane fade" id="advanced-config" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Configurações Avançadas</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="advanced-form">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="debug-mode">
+                                        <label class="form-check-label" for="debug-mode">
+                                            Modo Debug (logs detalhados)
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="experimental-features">
+                                        <label class="form-check-label" for="experimental-features">
+                                            Recursos experimentais
+                                        </label>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="max-content-length" class="form-label fw-bold">Tamanho máximo do conteúdo (KB)</label>
+                                        <input type="number" class="form-control" id="max-content-length" min="100" max="10000" value="5000">
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="custom-headers" class="form-label fw-bold">Headers Customizados (JSON)</label>
+                                        <textarea class="form-control" id="custom-headers" rows="3" placeholder='{"Authorization": "Bearer token", "Custom-Header": "value"}'></textarea>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Estatísticas & Logs</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="stats-container">
+                                    <div class="row text-center mb-3">
+                                        <div class="col-4">
+                                            <div class="border rounded p-2">
+                                                <div class="h4 mb-0" id="total-requests">0</div>
+                                                <small class="text-muted">Requisições</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="border rounded p-2">
+                                                <div class="h4 mb-0" id="success-rate">0%</div>
+                                                <small class="text-muted">Taxa Sucesso</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="border rounded p-2">
+                                                <div class="h4 mb-0" id="avg-response-time">0ms</div>
+                                                <small class="text-muted">Tempo Médio</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button id="view-logs" class="btn btn-outline-secondary btn-sm">
+                                            <i class="bi bi-file-text me-1"></i>Ver Logs
+                                        </button>
+                                        <button id="export-settings" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-download me-1"></i>Exportar Configurações
+                                        </button>
+                                        <button id="import-settings" class="btn btn-outline-success btn-sm">
+                                            <i class="bi bi-upload me-1"></i>Importar Configurações
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Última atualização: <span id="last-update">Nunca</span></small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button id="save-all" class="btn btn-success">
+                            <i class="bi bi-check-lg me-1"></i>Salvar Todas as Configurações
+                        </button>
+                        <button id="open-dashboard" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Dashboard
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="import-file" accept=".json" style="display: none;">
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="options.js"></script>
 </body>
 </html> 
