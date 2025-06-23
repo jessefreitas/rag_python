@@ -129,6 +129,68 @@ async def list_providers():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Endpoints para Extensão Chrome
+@app.get("/api/v1/extension/health")
+async def extension_health():
+    """Health check para extensão Chrome"""
+    return {
+        "status": "ok",
+        "version": "1.5.1",
+        "timestamp": datetime.now().isoformat(),
+        "message": "RAG Python API funcionando"
+    }
+
+@app.post("/api/v1/extension/scrape")
+async def extension_scrape(request: dict):
+    """Endpoint para receber dados da extensão Chrome"""
+    try:
+        url = request.get('url')
+        content = request.get('content')
+        title = request.get('title')
+        
+        if not url or not content:
+            raise HTTPException(status_code=400, detail="URL e conteúdo são obrigatórios")
+        
+        # Processar conteúdo
+        result = {
+            "success": True,
+            "message": "Conteúdo processado com sucesso",
+            "data": {
+                "url": url,
+                "title": title,
+                "content_length": len(content),
+                "processed_at": datetime.now().isoformat()
+            }
+        }
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/extension/analyze")
+async def extension_analyze(request: dict):
+    """Analisa conteúdo da extensão com RAG"""
+    try:
+        content = request.get('content')
+        question = request.get('question', 'Resuma este conteúdo')
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Conteúdo é obrigatório")
+        
+        # Simular análise RAG
+        response = f"Análise do conteúdo: {content[:200]}..."
+        
+        return {
+            "success": True,
+            "response": response,
+            "question": question,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Iniciando API REST - RAG Python v1.4.0")

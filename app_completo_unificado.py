@@ -244,7 +244,8 @@ class RAGSystemUnified:
             
             # Gerar resposta
             model = agent['model'] if agent else self.settings['model_name']
-            temperature = agent['temperature'] if agent else self.settings['temperature']
+            # Converter Decimal para float se necessário
+            temperature = float(agent['temperature']) if agent else float(self.settings['temperature'])
             
             response = self.llm_manager.generate_response(
                 messages,
@@ -869,30 +870,57 @@ def documents_interface(rag_system):
     with tab1:
         st.subheader("📤 Upload de Documentos")
         
+        # Seleção de agente para a base de conhecimento
+        agents = rag_system.agent_manager.get_all_agents()
+        agent_options = {"Base Geral": None}
+        agent_options.update({f"{agent['name']} (ID: {agent['id'][:8]}...)": agent['id'] for agent in agents})
+        
+        selected_agent = st.selectbox(
+            "🤖 Selecionar Agente para Base de Conhecimento:", 
+            list(agent_options.keys()),
+            help="Escolha qual agente receberá estes documentos em sua base de conhecimento"
+        )
+        agent_id = agent_options[selected_agent]
+        
+        if agent_id:
+            agent = rag_system.agent_manager.get_agent_by_id(agent_id)
+            if agent:
+                st.info(f"📚 Documentos serão adicionados à base do agente: **{agent['name']}**")
+        else:
+            st.info("📚 Documentos serão adicionados à base geral do sistema")
+        
         uploaded_files = st.file_uploader("Selecionar Arquivos:", 
                                         accept_multiple_files=True,
                                         type=['txt', 'pdf', 'docx', 'md'])
         
         if uploaded_files:
+            st.markdown("### 📋 Arquivos Selecionados:")
             for file in uploaded_files:
                 st.write(f"📄 {file.name} ({file.size} bytes)")
         
-        if st.button("📤 Processar Uploads"):
+        if st.button("📤 Processar Uploads", type="primary"):
             if uploaded_files:
                 with st.spinner("📤 Processando arquivos..."):
                     for file in uploaded_files:
                         # Simular processamento
                         content = file.read().decode('utf-8') if file.type == 'text/plain' else "Conteúdo processado"
                         
-                        rag_system.documents.append({
+                        document = {
                             'name': file.name,
                             'content': content,
                             'type': file.type,
                             'size': file.size,
-                            'uploaded_at': datetime.now().isoformat()
-                        })
+                            'uploaded_at': datetime.now().isoformat(),
+                            'agent_id': agent_id,
+                            'agent_name': agent['name'] if agent_id and agent else 'Base Geral'
+                        }
+                        
+                        rag_system.documents.append(document)
                 
+                agent_name = agent['name'] if agent_id and agent else 'Base Geral'
                 st.success(f"✅ {len(uploaded_files)} arquivo(s) processado(s) com sucesso!")
+                st.success(f"📚 Documentos adicionados à base: **{agent_name}**")
+                st.balloons()
                 st.rerun()
             else:
                 st.warning("⚠️ Selecione arquivos para upload.")
@@ -901,22 +929,46 @@ def documents_interface(rag_system):
         st.subheader("📋 Documentos Carregados")
         
         if rag_system.documents:
+            # Filtro por agente
+            agents = rag_system.agent_manager.get_all_agents()
+            filter_options = ["Todos"] + ["Base Geral"] + [agent['name'] for agent in agents]
+            
+            selected_filter = st.selectbox("🔍 Filtrar por Agente:", filter_options)
+            
+            # Filtrar documentos
+            filtered_docs = []
             for i, doc in enumerate(rag_system.documents):
-                with st.expander(f"📄 {doc['name']}"):
-                    col1, col2 = st.columns([3, 1])
-                    
-                    with col1:
-                        st.write(f"**Tipo:** {doc.get('type', 'N/A')}")
-                        st.write(f"**Tamanho:** {doc.get('size', 0)} bytes")
-                        st.write(f"**Upload:** {doc.get('uploaded_at', 'N/A')}")
+                if selected_filter == "Todos":
+                    filtered_docs.append((i, doc))
+                elif selected_filter == "Base Geral" and not doc.get('agent_id'):
+                    filtered_docs.append((i, doc))
+                elif doc.get('agent_name') == selected_filter:
+                    filtered_docs.append((i, doc))
+            
+            if filtered_docs:
+                st.write(f"📊 Mostrando {len(filtered_docs)} documento(s)")
+                
+                for i, doc in filtered_docs:
+                    agent_info = doc.get('agent_name', 'Base Geral')
+                    with st.expander(f"📄 {doc['name']} - 🤖 {agent_info}"):
+                        col1, col2 = st.columns([3, 1])
                         
-                        if st.button(f"👁️ Visualizar", key=f"view_{i}"):
-                            st.text_area("Conteúdo:", doc.get('content', '')[:500] + "...", height=100)
-                    
-                    with col2:
-                        if st.button(f"🗑️ Remover", key=f"remove_{i}"):
-                            rag_system.documents.pop(i)
-                            st.rerun()
+                        with col1:
+                            st.write(f"**Tipo:** {doc.get('type', 'N/A')}")
+                            st.write(f"**Tamanho:** {doc.get('size', 0)} bytes")
+                            st.write(f"**Upload:** {doc.get('uploaded_at', 'N/A')}")
+                            st.write(f"**Base de Conhecimento:** 🤖 {agent_info}")
+                            
+                            if st.button(f"👁️ Visualizar", key=f"view_{i}"):
+                                st.text_area("Conteúdo:", doc.get('content', '')[:500] + "...", height=100)
+                        
+                        with col2:
+                            if st.button(f"🗑️ Remover", key=f"remove_{i}"):
+                                rag_system.documents.pop(i)
+                                st.success("🗑️ Documento removido!")
+                                st.rerun()
+            else:
+                st.info(f"📝 Nenhum documento encontrado para: {selected_filter}")
         else:
             st.info("📝 Nenhum documento carregado ainda.")
     
