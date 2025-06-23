@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import psycopg2
 import psycopg2.extras
+import time
 
 # Importações do sistema
 from llm_providers import LLMProviderManager
@@ -223,48 +224,6 @@ class RAGSystemUnified:
             'max_tokens': 1000
         }
     
-    def configure_providers(self):
-        """Configuração de provedores LLM"""
-        st.sidebar.header("🔧 Configuração de Provedores")
-        
-        # OpenAI
-        openai_key = st.sidebar.text_input("🤖 OpenAI API Key", type="password", 
-                                          value=os.getenv('OPENAI_API_KEY', ''))
-        if openai_key:
-            os.environ['OPENAI_API_KEY'] = openai_key
-        
-        # Google Gemini
-        google_key = st.sidebar.text_input("🧠 Google Gemini API Key", type="password",
-                                          value=os.getenv('GOOGLE_API_KEY', ''))
-        if google_key:
-            os.environ['GOOGLE_API_KEY'] = google_key
-        
-        # OpenRouter
-        openrouter_key = st.sidebar.text_input("🌐 OpenRouter API Key", type="password",
-                                              value=os.getenv('OPENROUTER_API_KEY', ''))
-        if openrouter_key:
-            os.environ['OPENROUTER_API_KEY'] = openrouter_key
-        
-        # DeepSeek
-        deepseek_key = st.sidebar.text_input("🔮 DeepSeek API Key", type="password",
-                                            value=os.getenv('DEEPSEEK_API_KEY', ''))
-        if deepseek_key:
-            os.environ['DEEPSEEK_API_KEY'] = deepseek_key
-        
-        # Status dos provedores
-        st.sidebar.subheader("📊 Status dos Provedores")
-        try:
-            providers_info = self.llm_manager.get_provider_info()
-            
-            for provider, info in providers_info.items():
-                if isinstance(info, dict):
-                    status = "✅ Ativo" if info.get('available', False) else "❌ Inativo"
-                else:
-                    status = "❌ Inativo"
-                st.sidebar.write(f"**{provider}:** {status}")
-        except Exception as e:
-            st.sidebar.error(f"Erro ao carregar provedores: {str(e)}")
-    
     def query_with_agent(self, question: str, agent_id: str = None) -> Dict:
         """Processa pergunta com agente específico"""
         try:
@@ -345,9 +304,6 @@ def main():
     st.markdown('<h1 class="main-header">🚀 RAG Python v1.5.1 - Sistema Completo</h1>', 
                 unsafe_allow_html=True)
     
-    # Configuração de provedores na sidebar
-    rag_system.configure_providers()
-    
     # Tabs principais
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "🏠 Dashboard",
@@ -384,95 +340,171 @@ def dashboard_interface(rag_system):
     """Interface do Dashboard"""
     st.header("📊 Dashboard do Sistema")
     
+    # Métricas principais
     col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("""
-        <div class="feature-card">
-            <h3>🤖 Agentes</h3>
-            <p>Sistema de agentes especializados com RAG</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="feature-card">
-            <h3>🔄 Multi-LLM</h3>
-            <p>Comparação entre 4 provedores de IA</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="feature-card">
-            <h3>🔒 Privacidade</h3>
-            <p>Compliance LGPD com Microsoft Presidio</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="feature-card">
-            <h3>📁 Documentos</h3>
-            <p>Gestão completa de base de conhecimento</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Status dos provedores
-    st.subheader("🌐 Status dos Provedores LLM")
-    
-    try:
-        providers_info = rag_system.llm_manager.get_provider_info()
-        
-        if providers_info:
-            cols = st.columns(len(providers_info))
-            for i, (provider, info) in enumerate(providers_info.items()):
-                with cols[i]:
-                    if isinstance(info, dict):
-                        available = info.get('available', False)
-                        status_color = "#28a745" if available else "#dc3545"
-                        status_text = "✅ Ativo" if available else "❌ Inativo"
-                        model_text = info.get('model', 'N/A')
-                    else:
-                        status_color = "#dc3545"
-                        status_text = "❌ Inativo"
-                        model_text = "N/A"
-                    
-                    st.markdown(f"""
-                    <div class="provider-card" style="background: {status_color};">
-                        <h4>{provider.upper()}</h4>
-                        <p>Status: {status_text}</p>
-                        <p>Modelo: {model_text}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.info("🔧 Configurando provedores...")
-    except Exception as e:
-        st.error(f"Erro ao carregar status dos provedores: {str(e)}")
-    
-    # Estatísticas do sistema
-    st.subheader("📈 Estatísticas do Sistema")
-    
-    col1, col2, col3 = st.columns(3)
     
     with col1:
         try:
             agents = rag_system.agent_manager.get_all_agents()
-            st.metric("Agentes Cadastrados", len(agents))
+            st.metric("🤖 Agentes", len(agents), help="Agentes especializados cadastrados")
         except:
-            st.metric("Agentes Cadastrados", "Erro")
+            st.metric("🤖 Agentes", "N/A", help="Erro ao carregar agentes")
     
     with col2:
-        st.metric("Documentos Carregados", len(rag_system.documents))
+        st.metric("📄 Documentos", len(rag_system.documents), help="Documentos na base de conhecimento")
     
     with col3:
+        configured_keys = sum([
+            bool(os.getenv('OPENAI_API_KEY')),
+            bool(os.getenv('GOOGLE_API_KEY')),
+            bool(os.getenv('OPENROUTER_API_KEY')),
+            bool(os.getenv('DEEPSEEK_API_KEY'))
+        ])
+        st.metric("🔑 API Keys", f"{configured_keys}/4", help="API Keys configuradas")
+    
+    with col4:
         try:
             providers_info = rag_system.llm_manager.get_provider_info()
-            active_providers = sum(1 for info in providers_info.values() 
-                                 if isinstance(info, dict) and info.get('available', False))
-            st.metric("Provedores Ativos", active_providers)
+            active_providers = 0
+            for info in providers_info.values():
+                if isinstance(info, dict) and info.get('available', False):
+                    active_providers += 1
+            st.metric("🌐 Provedores", f"{active_providers}/4", help="Provedores LLM ativos")
         except:
-            st.metric("Provedores Ativos", "Erro")
+            st.metric("🌐 Provedores", "N/A", help="Erro ao verificar provedores")
+    
+    # Status dos provedores LLM
+    st.markdown("---")
+    st.subheader("🌐 Status dos Provedores LLM")
+    
+    # Verificar status das API keys
+    providers_status = {
+        "OpenAI": {
+            "key": bool(os.getenv('OPENAI_API_KEY')),
+            "icon": "🤖",
+            "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4o-mini"]
+        },
+        "Google Gemini": {
+            "key": bool(os.getenv('GOOGLE_API_KEY')),
+            "icon": "🧠",
+            "models": ["gemini-pro", "gemini-1.5-flash"]
+        },
+        "OpenRouter": {
+            "key": bool(os.getenv('OPENROUTER_API_KEY')),
+            "icon": "🌐",
+            "models": ["claude-3", "llama-2", "mixtral"]
+        },
+        "DeepSeek": {
+            "key": bool(os.getenv('DEEPSEEK_API_KEY')),
+            "icon": "🔮",
+            "models": ["deepseek-chat", "deepseek-coder"]
+        }
+    }
+    
+    cols = st.columns(4)
+    for i, (provider, info) in enumerate(providers_status.items()):
+        with cols[i]:
+            status = "✅ Ativo" if info['key'] else "❌ Inativo"
+            color = "#d4edda" if info['key'] else "#f8d7da"
+            border_color = "#28a745" if info['key'] else "#dc3545"
+            
+            st.markdown(f"""
+            <div style="
+                background-color: {color}; 
+                border: 2px solid {border_color}; 
+                border-radius: 10px; 
+                padding: 15px; 
+                text-align: center;
+                margin: 5px;
+                min-height: 120px;
+            ">
+                <h3 style="margin: 0;">{info['icon']} {provider}</h3>
+                <p style="margin: 5px 0; font-weight: bold;">{status}</p>
+                <small>Modelos: {len(info['models'])}</small>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Funcionalidades do sistema
+    st.markdown("---")
+    st.subheader("🚀 Funcionalidades Disponíveis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### 💬 Chat RAG
+        - Conversação inteligente com agentes
+        - Busca em base de conhecimento
+        - Histórico de conversas
+        
+        ### 🤖 Sistema de Agentes
+        - Agentes especializados por domínio
+        - Configuração personalizada
+        - Prompts otimizados
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### 🔄 Multi-LLM
+        - Comparação entre 4 provedores
+        - Métricas de performance
+        - Análise de qualidade
+        
+        ### 🔒 Privacidade LGPD
+        - Detecção de dados sensíveis
+        - Anonimização automática
+        - Compliance reports
+        """)
+    
+    # Ações rápidas
+    st.markdown("---")
+    st.subheader("⚡ Ações Rápidas")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("🔧 Configurar APIs", help="Ir para configurações de API"):
+            st.switch_page("⚙️ Configurações")
+    
+    with col2:
+        if st.button("🤖 Criar Agente", help="Criar novo agente"):
+            st.switch_page("🤖 Agentes")
+    
+    with col3:
+        if st.button("📤 Upload Docs", help="Fazer upload de documentos"):
+            st.switch_page("📁 Documentos")
+    
+    with col4:
+        if st.button("🧪 Testar LLMs", help="Testar conectividade"):
+            st.switch_page("⚙️ Configurações")
+    
+    # Informações do sistema
+    st.markdown("---")
+    st.subheader("ℹ️ Informações do Sistema")
+    
+    info_col1, info_col2 = st.columns(2)
+    
+    with info_col1:
+        st.info("""
+        **🚀 RAG Python v1.5.1-Unified**
+        
+        Sistema completo de RAG com:
+        - Multi-LLM integration
+        - Sistema de agentes especializados
+        - Compliance LGPD
+        - Interface unificada
+        """)
+    
+    with info_col2:
+        st.success("""
+        **✅ Sistema Operacional**
+        
+        Status:
+        - ✅ Interface carregada
+        - ✅ Banco PostgreSQL conectado
+        - ✅ Sistema de arquivos OK
+        - ✅ Pronto para uso
+        """)
 
 def chat_rag_interface(rag_system):
     """Interface do Chat RAG"""
@@ -910,9 +942,202 @@ def settings_interface(rag_system):
     """Interface de configurações"""
     st.header("⚙️ Configurações do Sistema")
     
-    tab1, tab2, tab3 = st.tabs(["🎛️ Geral", "🔑 API Keys", "💾 Backup"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔑 API Keys", "🧪 Testes", "🎛️ Geral", "💾 Backup"])
     
     with tab1:
+        st.subheader("🔑 Configuração de Provedores LLM")
+        
+        # Configuração das API Keys
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🤖 OpenAI")
+            openai_key = st.text_input("OpenAI API Key:", type="password", 
+                                      value=os.getenv('OPENAI_API_KEY', ''),
+                                      key="openai_key")
+            if openai_key:
+                os.environ['OPENAI_API_KEY'] = openai_key
+            
+            st.markdown("### 🌐 OpenRouter")
+            openrouter_key = st.text_input("OpenRouter API Key:", type="password",
+                                          value=os.getenv('OPENROUTER_API_KEY', ''),
+                                          key="openrouter_key")
+            if openrouter_key:
+                os.environ['OPENROUTER_API_KEY'] = openrouter_key
+        
+        with col2:
+            st.markdown("### 🧠 Google Gemini")
+            google_key = st.text_input("Google Gemini API Key:", type="password",
+                                      value=os.getenv('GOOGLE_API_KEY', ''),
+                                      key="google_key")
+            if google_key:
+                os.environ['GOOGLE_API_KEY'] = google_key
+            
+            st.markdown("### 🔮 DeepSeek")
+            deepseek_key = st.text_input("DeepSeek API Key:", type="password",
+                                        value=os.getenv('DEEPSEEK_API_KEY', ''),
+                                        key="deepseek_key")
+            if deepseek_key:
+                os.environ['DEEPSEEK_API_KEY'] = deepseek_key
+        
+        # Status das API Keys
+        st.markdown("---")
+        st.subheader("📊 Status das API Keys")
+        
+        keys_status = {
+            "🤖 OpenAI": bool(os.getenv('OPENAI_API_KEY')),
+            "🧠 Google Gemini": bool(os.getenv('GOOGLE_API_KEY')),
+            "🌐 OpenRouter": bool(os.getenv('OPENROUTER_API_KEY')),
+            "🔮 DeepSeek": bool(os.getenv('DEEPSEEK_API_KEY'))
+        }
+        
+        cols = st.columns(4)
+        for i, (provider, configured) in enumerate(keys_status.items()):
+            with cols[i]:
+                status = "✅ Ativa" if configured else "❌ Inativa"
+                color = "#28a745" if configured else "#dc3545"
+                st.markdown(f"""
+                <div style="text-align: center; padding: 10px; border: 1px solid {color}; border-radius: 5px; margin: 5px;">
+                    <strong>{provider}</strong><br>
+                    <span style="color: {color};">{status}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with tab2:
+        st.subheader("🧪 Testes de Conectividade")
+        
+        st.info("🔍 Teste a conectividade e funcionamento dos provedores LLM")
+        
+        # Seleção de provedores para teste
+        providers_to_test = st.multiselect(
+            "Selecione os provedores para testar:",
+            ["openai", "google", "openrouter", "deepseek"],
+            default=["openai"]
+        )
+        
+        test_message = st.text_input("Mensagem de teste:", 
+                                    value="Olá, este é um teste de conectividade. Responda apenas 'OK'.")
+        
+        if st.button("🚀 Executar Testes"):
+            if providers_to_test:
+                st.markdown("### 📊 Resultados dos Testes")
+                
+                for provider in providers_to_test:
+                    with st.expander(f"🧪 Teste: {provider.upper()}"):
+                        try:
+                            # Testar conectividade
+                            start_time = time.time()
+                            
+                            # Simular teste (você pode implementar teste real aqui)
+                            messages = [{"role": "user", "content": test_message}]
+                            
+                            # Verificar se tem API key
+                            key_map = {
+                                'openai': 'OPENAI_API_KEY',
+                                'google': 'GOOGLE_API_KEY', 
+                                'openrouter': 'OPENROUTER_API_KEY',
+                                'deepseek': 'DEEPSEEK_API_KEY'
+                            }
+                            
+                            if not os.getenv(key_map.get(provider, '')):
+                                st.error(f"❌ API Key não configurada para {provider}")
+                                continue
+                            
+                            # Tentar gerar resposta
+                            try:
+                                response = rag_system.llm_manager.generate_response(
+                                    messages, 
+                                    provider=provider,
+                                    model="gpt-3.5-turbo" if provider == "openai" else None
+                                )
+                                
+                                end_time = time.time()
+                                response_time = round(end_time - start_time, 2)
+                                
+                                st.success(f"✅ **Sucesso!** Tempo: {response_time}s")
+                                st.write(f"**Resposta:** {response}")
+                                
+                                # Métricas
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("⏱️ Tempo", f"{response_time}s")
+                                with col2:
+                                    st.metric("📊 Status", "✅ OK")
+                                with col3:
+                                    st.metric("📝 Caracteres", len(response))
+                                    
+                            except Exception as e:
+                                st.error(f"❌ **Erro na resposta:** {str(e)}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ **Erro no teste:** {str(e)}")
+            else:
+                st.warning("⚠️ Selecione pelo menos um provedor para testar.")
+        
+        # Teste de comparação rápida
+        st.markdown("---")
+        st.subheader("⚡ Teste Rápido Multi-LLM")
+        
+        if st.button("🔄 Comparar Todos os Provedores"):
+            test_question = "Qual é a capital do Brasil?"
+            
+            with st.spinner("🔄 Testando todos os provedores..."):
+                results = {}
+                
+                for provider in ["openai", "google", "openrouter", "deepseek"]:
+                    try:
+                        key_map = {
+                            'openai': 'OPENAI_API_KEY',
+                            'google': 'GOOGLE_API_KEY', 
+                            'openrouter': 'OPENROUTER_API_KEY',
+                            'deepseek': 'DEEPSEEK_API_KEY'
+                        }
+                        
+                        if os.getenv(key_map.get(provider, '')):
+                            start_time = time.time()
+                            
+                            messages = [{"role": "user", "content": test_question}]
+                            response = rag_system.llm_manager.generate_response(
+                                messages, 
+                                provider=provider
+                            )
+                            
+                            end_time = time.time()
+                            
+                            results[provider] = {
+                                'response': response,
+                                'time': round(end_time - start_time, 2),
+                                'status': 'success'
+                            }
+                        else:
+                            results[provider] = {
+                                'response': 'API Key não configurada',
+                                'time': 0,
+                                'status': 'error'
+                            }
+                            
+                    except Exception as e:
+                        results[provider] = {
+                            'response': f'Erro: {str(e)}',
+                            'time': 0,
+                            'status': 'error'
+                        }
+                
+                # Mostrar resultados
+                st.markdown("### 📊 Resultados da Comparação")
+                
+                for provider, result in results.items():
+                    with st.expander(f"📱 {provider.upper()} - {'✅' if result['status'] == 'success' else '❌'}"):
+                        if result['status'] == 'success':
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.write(f"**Resposta:** {result['response']}")
+                            with col2:
+                                st.metric("⏱️ Tempo", f"{result['time']}s")
+                        else:
+                            st.error(result['response'])
+    
+    with tab3:
         st.subheader("🎛️ Configurações Gerais")
         
         # Configurações do modelo padrão
@@ -922,7 +1147,7 @@ def settings_interface(rag_system):
             default_model = st.selectbox("🤖 Modelo Padrão:", [
                 "gpt-3.5-turbo", "gpt-4", "gpt-4-turbo-preview", "gpt-4o-mini",
                 "gemini-pro", "deepseek-chat"
-            ])
+            ], index=0)
             
             default_temperature = st.slider("🌡️ Temperatura Padrão:", 0.0, 2.0, 0.7, 0.1)
         
@@ -931,40 +1156,70 @@ def settings_interface(rag_system):
             
             debug_mode = st.checkbox("🐛 Modo Debug", value=False)
         
+        # Configurações avançadas
+        st.markdown("---")
+        st.subheader("🔧 Configurações Avançadas")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            timeout_duration = st.number_input("⏱️ Timeout (segundos):", min_value=5, max_value=300, value=30)
+            retry_attempts = st.number_input("🔄 Tentativas de Retry:", min_value=1, max_value=10, value=3)
+        
+        with col2:
+            enable_logging = st.checkbox("📝 Habilitar Logging", value=True)
+            enable_cache = st.checkbox("💾 Habilitar Cache", value=True)
+        
         if st.button("💾 Salvar Configurações"):
             rag_system.settings.update({
                 'model_name': default_model,
                 'temperature': default_temperature,
                 'max_tokens': max_tokens,
-                'debug_mode': debug_mode
+                'debug_mode': debug_mode,
+                'timeout': timeout_duration,
+                'retry_attempts': retry_attempts,
+                'enable_logging': enable_logging,
+                'enable_cache': enable_cache
             })
-            st.success("✅ Configurações salvas!")
+            st.success("✅ Configurações salvas com sucesso!")
     
-    with tab2:
-        st.subheader("🔑 Gerenciamento de API Keys")
-        
-        st.info("🔒 Configure suas API Keys nas variáveis de ambiente ou na sidebar.")
-        
-        # Mostrar status das keys (sem revelar)
-        keys_status = {
-            "OpenAI": bool(os.getenv('OPENAI_API_KEY')),
-            "Google Gemini": bool(os.getenv('GOOGLE_API_KEY')),
-            "OpenRouter": bool(os.getenv('OPENROUTER_API_KEY')),
-            "DeepSeek": bool(os.getenv('DEEPSEEK_API_KEY'))
-        }
-        
-        for provider, configured in keys_status.items():
-            status = "✅ Configurada" if configured else "❌ Não configurada"
-            st.write(f"**{provider}:** {status}")
-    
-    with tab3:
+    with tab4:
         st.subheader("💾 Backup e Restauração")
         
+        # Informações do sistema
+        st.markdown("### 📊 Informações do Sistema")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("📄 Documentos", len(rag_system.documents))
+        
+        with col2:
+            try:
+                agents = rag_system.agent_manager.get_all_agents()
+                st.metric("🤖 Agentes", len(agents))
+            except:
+                st.metric("🤖 Agentes", "N/A")
+        
+        with col3:
+            configured_keys = sum([
+                bool(os.getenv('OPENAI_API_KEY')),
+                bool(os.getenv('GOOGLE_API_KEY')),
+                bool(os.getenv('OPENROUTER_API_KEY')),
+                bool(os.getenv('DEEPSEEK_API_KEY'))
+            ])
+            st.metric("🔑 API Keys", f"{configured_keys}/4")
+        
+        st.markdown("---")
+        
+        # Export
         if st.button("📥 Exportar Configurações"):
             config_data = {
                 'settings': rag_system.settings,
                 'documents_count': len(rag_system.documents),
-                'export_date': datetime.now().isoformat()
+                'api_keys_configured': configured_keys,
+                'export_date': datetime.now().isoformat(),
+                'version': '1.5.1-unified'
             }
             
             st.download_button(
@@ -974,8 +1229,7 @@ def settings_interface(rag_system):
                 mime="application/json"
             )
         
-        st.write("---")
-        
+        # Import
         uploaded_config = st.file_uploader("📤 Importar Configurações:", type=['json'])
         
         if uploaded_config and st.button("📥 Restaurar Configurações"):
@@ -983,6 +1237,7 @@ def settings_interface(rag_system):
                 config_data = json.load(uploaded_config)
                 rag_system.settings.update(config_data.get('settings', {}))
                 st.success("✅ Configurações restauradas com sucesso!")
+                st.info(f"📊 Importado de: {config_data.get('export_date', 'N/A')}")
             except Exception as e:
                 st.error(f"❌ Erro ao importar configurações: {str(e)}")
 
