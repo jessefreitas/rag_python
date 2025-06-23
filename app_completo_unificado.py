@@ -25,6 +25,13 @@ from privacy_system import privacy_manager
 from vector_store import VectorStore
 from database import Database
 
+# Importar o novo gerenciador de modelos
+try:
+    from llm_models_config import models_manager
+except ImportError:
+    models_manager = None
+    logger.warning("Módulo llm_models_config não encontrado")
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -281,7 +288,7 @@ class RAGSystemUnified:
                     file_type VARCHAR(50),
                     file_size INTEGER,
                     agent_id UUID REFERENCES agentes(id) ON DELETE CASCADE,
-                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     processed BOOLEAN DEFAULT FALSE,
                     vector_store_id VARCHAR(255)
                 );
@@ -289,19 +296,21 @@ class RAGSystemUnified:
             
             create_index = """
                 CREATE INDEX IF NOT EXISTS idx_documents_agent_id ON documents(agent_id);
-                CREATE INDEX IF NOT EXISTS idx_documents_upload_date ON documents(upload_date);
+                CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
             """
             
-            self._execute_query(create_agents_table)
-            self._execute_query(create_documents_table)
-            self._execute_query(create_index)
+            self.agent_manager._execute_query(create_agents_table)
+            self.agent_manager._execute_query(create_documents_table)
+            self.agent_manager._execute_query(create_index)
             
             logger.info("Tabelas criadas/verificadas com sucesso")
             
         except Exception as e:
             logger.error(f"Erro ao criar tabelas: {e}")
+            # Não falhar se não conseguir conectar no PostgreSQL
+            logger.warning("Sistema funcionará sem PostgreSQL - usando dados em memória")
     
-    def query_with_agent(self, question: str, agent_id: str = None, llm: str = None) -> Dict:
+    def query_with_agent(self, question: str, agent_id: str = None, llm: str = None, model: str = None) -> Dict:
         """Processa pergunta com agente específico e LLM escolhido"""
         try:
             import time
@@ -343,10 +352,12 @@ class RAGSystemUnified:
             
             # Determinar configurações
             if agent:
-                model = agent['model']
+                # Usar modelo específico se fornecido, senão usar do agente
+                final_model = model if model and model != "default" else agent['model']
                 temperature = float(agent['temperature'])
             else:
-                model = self.settings['model_name']
+                # Usar modelo específico se fornecido, senão usar padrão
+                final_model = model if model and model != "default" else self.settings['model_name']
                 temperature = float(self.settings['temperature'])
             
             # Gerar resposta usando LLM especificado
@@ -354,7 +365,7 @@ class RAGSystemUnified:
                 result = self.llm_manager.generate_response(
                     messages,
                     provider_name=llm,
-                    model=model,
+                    model=final_model,
                     temperature=temperature
                 )
                 
@@ -363,7 +374,7 @@ class RAGSystemUnified:
                     return {
                         'answer': result['response'],
                         'agent_used': agent['name'] if agent else 'Sistema Padrão',
-                        'model_used': result.get('model', model),
+                        'model_used': result.get('model', final_model),
                         'llm_used': llm,
                         'response_time': round(end_time - start_time, 2),
                         'documents_used': len(context_docs),
@@ -373,7 +384,7 @@ class RAGSystemUnified:
                     return {
                         'answer': f"Erro: {result.get('error', 'Erro desconhecido')}",
                         'agent_used': agent['name'] if agent else 'Sistema Padrão',
-                        'model_used': model,
+                        'model_used': final_model,
                         'llm_used': llm,
                         'response_time': 0,
                         'documents_used': 0,
@@ -383,7 +394,7 @@ class RAGSystemUnified:
                 # Usar método legado
                 response = self.llm_manager.generate_response_old(
                     messages,
-                    model=model,
+                    model=final_model,
                     temperature=temperature
                 )
                 
@@ -391,7 +402,7 @@ class RAGSystemUnified:
                 return {
                     'answer': response,
                     'agent_used': agent['name'] if agent else 'Sistema Padrão',
-                    'model_used': model,
+                    'model_used': final_model,
                     'llm_used': 'padrão',
                     'response_time': round(end_time - start_time, 2),
                     'documents_used': len(context_docs),
@@ -438,7 +449,7 @@ class RAGSystemUnified:
                         'name': row[1] or 'Documento sem nome',
                         'file_type': row[2] or 'unknown',
                         'content_hash': row[3],
-                        'upload_date': row[4],
+                        'created_at': row[4],
                         'agent_id': str(row[5]),
                         'chunk_count': row[6] or 0
                     })
@@ -588,13 +599,12 @@ class RAGSystemUnified:
                 for row in rows:
                     documents.append({
                         'id': str(row[0]),
-                        'file_name': row[1] or 'Sem nome',
-                        'source_type': row[2] or 'unknown',
-                        'content_hash': row[3][:8] + '...' if row[3] else 'N/A',
+                        'name': row[1] or 'Documento sem nome',
+                        'file_type': row[2] or 'unknown',
+                        'content_hash': row[3],
                         'created_at': row[4],
-                        'agent_name': row[5],
-                        'agent_id': str(row[6]),
-                        'chunk_count': row[7] or 0
+                        'agent_id': str(row[5]),
+                        'chunk_count': row[6] or 0
                     })
             
             return documents
@@ -657,6 +667,31 @@ class RAGSystemUnified:
             import uuid
             from datetime import datetime
             
+            # Se não há agent_id, criar ou usar agente padrão
+            if not agent_id:
+                # Buscar agente padrão existente
+                default_query = "SELECT id FROM agentes WHERE name = 'Sistema Padrão' LIMIT 1"
+                default_agent = self.agent_manager._execute_query(default_query, fetch='one')
+                
+                if default_agent:
+                    agent_id = str(default_agent['id'])
+                else:
+                    # Criar agente padrão
+                    agent_id = self.agent_manager.create_agent(
+                        name="Sistema Padrão",
+                        description="Agente padrão do sistema para documentos gerais",
+                        agent_type="Geral",
+                        system_prompt="Você é um assistente inteligente que ajuda com documentos gerais.",
+                        model="gpt-3.5-turbo",
+                        temperature=0.7
+                    )
+                    
+                    if not agent_id:
+                        return {
+                            'success': False,
+                            'error': 'Falha ao criar agente padrão'
+                        }
+            
             # Gerar hash do conteúdo
             content_hash = hashlib.sha256(file_content.encode()).hexdigest()
             
@@ -713,7 +748,8 @@ class RAGSystemUnified:
                 'success': True,
                 'document_id': doc_id,
                 'chunks_created': embeddings_created,
-                'total_chunks': len(chunks)
+                'total_chunks': len(chunks),
+                'agent_id': agent_id
             }
             
         except Exception as e:
@@ -750,12 +786,113 @@ class RAGSystemUnified:
     def _generate_embedding(self, text: str) -> List[float]:
         """Gera embedding para o texto (simulado)"""
         try:
+            import random
             # Em produção, usar OpenAI embeddings ou similar
             # Por enquanto, retornar embedding simulado
             return [random.random() for _ in range(1536)]  # Dimensão do text-embedding-3-small
         except Exception as e:
             logger.error(f"Erro ao gerar embedding: {e}")
             return None
+    
+    def save_conversation_to_db(self, agent_id: str, user_message: str, assistant_response: str, 
+                               provider: str, model_used: str, response_time: float = 0) -> bool:
+        """Salva conversa no banco de dados PostgreSQL"""
+        try:
+            # 1. Inserir conversa
+            conversation_query = """
+                INSERT INTO conversations (agent_id, user_message) 
+                VALUES (%s, %s) RETURNING id;
+            """
+            conversation_result = self.agent_manager._execute_query(
+                conversation_query, 
+                (agent_id, user_message), 
+                fetch='one'
+            )
+            
+            if conversation_result:
+                conversation_id = conversation_result[0]
+                
+                # 2. Inserir resposta do LLM
+                response_query = """
+                    INSERT INTO llm_responses (conversation_id, provider, model_used, response_text, tokens_used) 
+                    VALUES (%s, %s, %s, %s, %s);
+                """
+                
+                # Estimar tokens (aproximação simples)
+                estimated_tokens = len(assistant_response.split()) * 1.3
+                
+                self.agent_manager._execute_query(
+                    response_query,
+                    (conversation_id, provider, model_used, assistant_response, int(estimated_tokens))
+                )
+                
+                logger.info(f"Conversa salva no banco: conversation_id={conversation_id}")
+                return True
+            else:
+                logger.error("Falha ao inserir conversa no banco")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao salvar conversa no banco: {e}")
+            return False
+    
+    def get_available_models_by_provider(self) -> Dict[str, List[str]]:
+        """Retorna modelos disponíveis APENAS para provedores configurados"""
+        
+        # Verificar quais provedores estão realmente configurados
+        configured_providers = []
+        if os.getenv('OPENAI_API_KEY'):
+            configured_providers.append('openai')
+        if os.getenv('GOOGLE_API_KEY') or os.getenv('GOOGLE_GEMINI_API_KEY'):
+            configured_providers.append('google')
+        if os.getenv('OPENROUTER_API_KEY'):
+            configured_providers.append('openrouter')
+        if os.getenv('DEEPSEEK_API_KEY'):
+            configured_providers.append('deepseek')
+        
+        # Tentar usar o novo sistema de modelos
+        try:
+            from llm_models_config import models_manager
+            available = models_manager.get_provider_models_simple()
+            # Filtrar apenas provedores configurados
+            filtered = {k: v for k, v in available.items() if k in configured_providers}
+            return filtered if filtered else {'openai': ['gpt-3.5-turbo']}  # Fallback mínimo
+        except ImportError:
+            logger.warning("Sistema de modelos avançado não disponível, usando fallback")
+        
+        # Fallback SEGURO - apenas modelos testados
+        safe_models = {
+            'openai': [
+                'gpt-4o',
+                'gpt-4o-mini', 
+                'gpt-4-turbo',
+                'gpt-4',
+                'gpt-3.5-turbo'
+            ]
+        }
+        
+        # Só adicionar outros provedores se realmente configurados
+        if 'google' in configured_providers:
+            safe_models['google'] = ['gemini-1.5-flash', 'gemini-pro']
+        
+        if 'openrouter' in configured_providers:
+            safe_models['openrouter'] = ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet']
+        
+        if 'deepseek' in configured_providers:
+            safe_models['deepseek'] = ['deepseek-chat', 'deepseek-coder']
+        
+        # Retornar apenas modelos de provedores configurados
+        available_models = {}
+        for provider in configured_providers:
+            if provider in safe_models:
+                available_models[provider] = safe_models[provider]
+        
+        # Fallback de emergência - sempre incluir OpenAI se não houver nenhum
+        if not available_models:
+            available_models['openai'] = ['gpt-3.5-turbo']
+            logger.warning("Nenhum provedor configurado, usando fallback OpenAI")
+        
+        return available_models
 
 @st.cache_resource
 def initialize_system():
@@ -1013,7 +1150,6 @@ def dashboard_interface(rag_system):
         
         with col1:
             # Verificar diretórios importantes
-            import os
             dirs_to_check = [
                 'agent_uploads',
                 'agent_vector_dbs', 
@@ -1273,8 +1409,8 @@ def chat_rag_interface(rag_system):
     """Interface do Chat RAG"""
     st.header("💬 Chat RAG Inteligente")
     
-    # Configuração em duas colunas
-    col1, col2 = st.columns([1, 1])
+    # Configuração em três colunas
+    col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
         # Seleção de agente
@@ -1297,13 +1433,28 @@ def chat_rag_interface(rag_system):
         selected_llm_display = st.selectbox("🔧 Selecionar LLM:", list(llm_options.keys()))
         selected_llm = llm_options[selected_llm_display]
     
+    with col3:
+        # Seleção de modelo específico
+        available_models = rag_system.get_available_models_by_provider()
+        models_for_provider = available_models.get(selected_llm, [])
+        
+        if models_for_provider:
+            selected_model = st.selectbox(
+                f"🧠 Modelo {selected_llm.upper()}:",
+                models_for_provider,
+                help=f"Modelos disponíveis para {selected_llm_display}"
+            )
+        else:
+            selected_model = "default"
+            st.info(f"⚠️ Modelo padrão para {selected_llm_display}")
+    
     # Mostrar configuração atual
     if agent_id:
         agent = rag_system.agent_manager.get_agent_by_id(agent_id)
         if agent:
-            st.info(f"🤖 **Agente:** {agent['name']} | **LLM:** {selected_llm_display} | **Documentos:** {len(rag_system.get_agent_documents(agent_id))} docs")
+            st.info(f"🤖 **Agente:** {agent['name']} | **LLM:** {selected_llm_display} | **Modelo:** {selected_model} | **Documentos:** {len(rag_system.get_agent_documents(agent_id))} docs")
     else:
-        st.info(f"🤖 **Sistema Padrão** | **LLM:** {selected_llm_display} | **Base:** Geral")
+        st.info(f"🤖 **Sistema Padrão** | **LLM:** {selected_llm_display} | **Modelo:** {selected_model} | **Base:** Geral")
     
     # Histórico do chat
     if 'chat_history' not in st.session_state:
@@ -1320,10 +1471,10 @@ def chat_rag_interface(rag_system):
             else:
                 with st.chat_message("assistant"):
                     st.write(message['content'])
-                    st.caption(f"🤖 {message.get('agent', 'Sistema')} | 🔧 {message.get('llm', 'N/A')} | ⚡ {message.get('response_time', 0):.2f}s")
+                    st.caption(f"🤖 {message.get('agent', 'Sistema')} | 🔧 {message.get('llm', 'N/A')} | 🧠 {message.get('model', 'N/A')} | ⚡ {message.get('response_time', 0):.2f}s")
     
     # Input de mensagem com suporte ao Enter
-    user_input = st.chat_input("💭 Digite sua pergunta...")
+    user_input = st.chat_input("💭 Digite sua pergunta...", key="chat_rag_input")
     
     # Processar mensagem quando Enter for pressionado
     if user_input:
@@ -1335,15 +1486,27 @@ def chat_rag_interface(rag_system):
         
         # Processar resposta
         with st.spinner("🤔 Pensando..."):
-            result = rag_system.query_with_agent(user_input, agent_id, selected_llm)
+            result = rag_system.query_with_agent(user_input, agent_id, selected_llm, selected_model)
         
         # Adicionar resposta do assistente
         if result['success']:
+            # Salvar conversa no banco de dados
+            if agent_id:  # Só salva se tiver agente específico
+                rag_system.save_conversation_to_db(
+                    agent_id=agent_id,
+                    user_message=user_input,
+                    assistant_response=result['answer'],
+                    provider=result.get('llm_used', selected_llm),
+                    model_used=result.get('model_used', 'unknown'),
+                    response_time=result.get('response_time', 0)
+                )
+            
             st.session_state.chat_history.append({
                 'role': 'assistant',
                 'content': result['answer'],
                 'agent': result.get('agent_used', selected_agent),
                 'llm': selected_llm_display,
+                'model': result.get('model_used', 'N/A'),
                 'response_time': result.get('response_time', 0)
             })
         else:
@@ -1352,6 +1515,7 @@ def chat_rag_interface(rag_system):
                 'content': f"❌ Erro: {result.get('answer', 'Erro desconhecido')}",
                 'agent': result.get('agent_used', selected_agent),
                 'llm': selected_llm_display,
+                'model': result.get('model_used', 'N/A'),
                 'response_time': 0
             })
         
@@ -1499,7 +1663,7 @@ def multi_llm_interface(rag_system):
     """Interface Multi-LLM com testes e comparações"""
     st.header("🤖 Sistema Multi-LLM")
     
-    tab1, tab2, tab3 = st.tabs(["💬 Chat Individual", "⚖️ Comparação", "🧪 Testes"])
+    tab1, tab2, tab3, tab4 = st.tabs(["💬 Chat Individual", "⚖️ Comparação", "🧪 Testes", "🔧 Modelos Disponíveis"])
     
     with tab1:
         st.subheader("💬 Chat com Provedor Específico")
@@ -1538,7 +1702,7 @@ def multi_llm_interface(rag_system):
             st.info(f"🤖 **Sistema Padrão** | **Provedor:** {selected_provider.upper()}")
         
         # Chat input
-        user_question = st.chat_input("💭 Digite sua pergunta...")
+        user_question = st.chat_input("💭 Digite sua pergunta...", key="multi_llm_input")
         
         # Inicializar histórico se não existir
         if f"chat_history_{selected_provider}" not in st.session_state:
@@ -1774,6 +1938,156 @@ def multi_llm_interface(rag_system):
                         
                         except Exception as e:
                             st.error(f"❌ Exceção no {provider.upper()}: {str(e)}")
+    
+    with tab4:
+        st.subheader("🔧 Modelos Disponíveis por Provedor")
+        
+        st.markdown("""
+        📋 **Informações sobre Modelos LLM**
+        
+        Esta seção mostra todos os modelos disponíveis para cada provedor LLM configurado no sistema.
+        """)
+        
+        # Obter modelos disponíveis
+        available_models = rag_system.get_available_models_by_provider()
+        
+        # Criar tabs para cada provedor
+        provider_tabs = st.tabs([
+            "🤖 OpenAI", 
+            "🧠 Google Gemini", 
+            "🌐 OpenRouter", 
+            "🔮 DeepSeek"
+        ])
+        
+        providers_data = [
+            ('openai', '🤖 OpenAI', 'Modelos GPT da OpenAI'),
+            ('google', '🧠 Google Gemini', 'Modelos Gemini do Google'),
+            ('openrouter', '🌐 OpenRouter', 'Acesso unificado a múltiplos modelos'),
+            ('deepseek', '🔮 DeepSeek', 'Modelos avançados chineses')
+        ]
+        
+        for i, (provider_key, provider_name, description) in enumerate(providers_data):
+            with provider_tabs[i]:
+                st.markdown(f"### {provider_name}")
+                st.info(f"📝 {description}")
+                
+                # Verificar se provedor está configurado
+                api_key_env = {
+                    'openai': 'OPENAI_API_KEY',
+                    'google': 'GOOGLE_API_KEY', 
+                    'openrouter': 'OPENROUTER_API_KEY',
+                    'deepseek': 'DEEPSEEK_API_KEY'
+                }.get(provider_key, '')
+                
+                is_configured = bool(os.getenv(api_key_env))
+                
+                if is_configured:
+                    st.success(f"✅ {provider_name} configurado")
+                else:
+                    st.warning(f"⚠️ {provider_name} não configurado (falta API Key)")
+                
+                # Mostrar modelos
+                models = available_models.get(provider_key, [])
+                
+                if models:
+                    st.markdown("**🔧 Modelos Disponíveis:**")
+                    
+                    # Criar grid de modelos
+                    cols = st.columns(2)
+                    for idx, model in enumerate(models):
+                        with cols[idx % 2]:
+                            # Adicionar descrição para modelos conhecidos
+                            model_descriptions = {
+                                'gpt-4o': '🚀 Mais avançado da OpenAI',
+                                'gpt-4o-mini': '⚡ Rápido e eficiente',
+                                'gpt-4-turbo': '🎯 Otimizado para performance',
+                                'gpt-4': '🧠 Modelo principal da OpenAI',
+                                'gpt-3.5-turbo': '💡 Clássico e confiável',
+                                'gemini-1.5-pro': '🌟 Mais avançado do Google',
+                                'gemini-1.5-flash': '⚡ Rápido e preciso',
+                                'gemini-pro': '🧠 Modelo principal do Google',
+                                'deepseek-chat': '💬 Conversação geral',
+                                'deepseek-coder': '💻 Especializado em código',
+                                'deepseek-math': '🔢 Especializado em matemática'
+                            }
+                            
+                            description = model_descriptions.get(model, '🤖 Modelo LLM')
+                            
+                            st.markdown(f"""
+                            <div style="
+                                background-color: #f0f2f6; 
+                                padding: 10px; 
+                                border-radius: 5px; 
+                                margin: 5px 0;
+                                border-left: 4px solid #1f77b4;
+                            ">
+                                <strong>{model}</strong><br>
+                                <small>{description}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Botão de teste para provedor configurado
+                    if is_configured:
+                        st.markdown("---")
+                        
+                        # Seleção de modelo para teste
+                        selected_model = st.selectbox(
+                            f"🧪 Testar Modelo {provider_name}:",
+                            models,
+                            key=f"test_model_{provider_key}"
+                        )
+                        
+                        test_message = st.text_input(
+                            "💭 Mensagem de teste:",
+                            value="Olá, como você está funcionando?",
+                            key=f"test_msg_{provider_key}"
+                        )
+                        
+                        if st.button(f"🧪 Testar {selected_model}", key=f"btn_test_model_{provider_key}"):
+                            with st.spinner(f"🧪 Testando {selected_model}..."):
+                                try:
+                                    result = rag_system.llm_manager.generate_response(
+                                        [{"role": "user", "content": test_message}],
+                                        provider_name=provider_key,
+                                        model=selected_model
+                                    )
+                                    
+                                    if result.get('success'):
+                                        st.success(f"✅ {selected_model} funcionando!")
+                                        st.info(f"⏱️ Tempo: {result.get('response_time', 0):.2f}s")
+                                        st.text_area(
+                                            "📝 Resposta:",
+                                            value=result.get('response', 'Sem resposta'),
+                                            height=100,
+                                            key=f"response_{provider_key}_{selected_model}"
+                                        )
+                                    else:
+                                        st.error(f"❌ Erro: {result.get('error', 'Erro desconhecido')}")
+                                
+                                except Exception as e:
+                                    st.error(f"❌ Exceção: {str(e)}")
+                else:
+                    st.warning("⚠️ Nenhum modelo disponível para este provedor")
+        
+        # Resumo geral
+        st.markdown("---")
+        st.markdown("### 📊 Resumo Geral")
+        
+        total_models = sum(len(models) for models in available_models.values())
+        configured_providers = sum([
+            bool(os.getenv('OPENAI_API_KEY')),
+            bool(os.getenv('GOOGLE_API_KEY')),
+            bool(os.getenv('OPENROUTER_API_KEY')),
+            bool(os.getenv('DEEPSEEK_API_KEY'))
+        ])
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🤖 Total de Modelos", total_models)
+        with col2:
+            st.metric("🔧 Provedores Configurados", f"{configured_providers}/4")
+        with col3:
+            st.metric("🌐 Provedores Disponíveis", len(available_models))
 
 def privacy_interface(rag_system):
     """Interface de privacidade LGPD"""
