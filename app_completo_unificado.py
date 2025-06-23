@@ -166,13 +166,20 @@ class AgentManager:
             return None
     
     def get_all_agents(self) -> List[Dict]:
-        """Obtém todos os agentes"""
+        """Lista todos os agentes"""
         try:
             query = "SELECT * FROM agentes ORDER BY created_at DESC"
             rows = self._execute_query(query, fetch='all')
-            return [dict(row) for row in rows] if rows else []
+            agents = []
+            for row in rows:
+                agent_data = dict(row)
+                # Converter Decimal para float se necessário
+                if 'temperature' in agent_data:
+                    agent_data['temperature'] = float(agent_data['temperature'])
+                agents.append(agent_data)
+            return agents
         except Exception as e:
-            logger.error(f"Erro ao buscar agentes: {e}")
+            logger.error(f"Erro ao listar agentes: {e}")
             return []
     
     def get_agent_by_id(self, agent_id: str) -> Optional[Dict]:
@@ -180,7 +187,13 @@ class AgentManager:
         try:
             query = "SELECT * FROM agentes WHERE id = %s"
             row = self._execute_query(query, (agent_id,), fetch='one')
-            return dict(row) if row else None
+            if row:
+                agent_data = dict(row)
+                # Converter Decimal para float se necessário
+                if 'temperature' in agent_data:
+                    agent_data['temperature'] = float(agent_data['temperature'])
+                return agent_data
+            return None
         except Exception as e:
             logger.error(f"Erro ao buscar agente: {e}")
             return None
@@ -546,39 +559,43 @@ def chat_rag_interface(rag_system):
                 </div>
                 """, unsafe_allow_html=True)
     
-    # Input de mensagem
-    user_input = st.text_input("💭 Digite sua pergunta:", key="chat_input", 
-                              placeholder="Faça uma pergunta...")
+    # Input de mensagem com suporte ao Enter
+    user_input = st.chat_input("💭 Digite sua pergunta...")
     
-    col1, col2 = st.columns([1, 4])
+    # Processar mensagem quando Enter for pressionado
+    if user_input:
+        # Adicionar mensagem do usuário
+        st.session_state.chat_history.append({
+            'role': 'user',
+            'content': user_input
+        })
+        
+        # Processar resposta
+        with st.spinner("🤔 Pensando..."):
+            result = rag_system.query_with_agent(user_input, agent_id)
+        
+        # Adicionar resposta do assistente
+        if result['success']:
+            st.session_state.chat_history.append({
+                'role': 'assistant',
+                'content': result['answer'],
+                'agent': result['agent_used'],
+                'model': result['model_used']
+            })
+        else:
+            st.session_state.chat_history.append({
+                'role': 'assistant',
+                'content': f"❌ Erro: {result['answer']}",
+                'agent': result['agent_used'],
+                'model': result['model_used']
+            })
+        
+        st.rerun()
     
-    with col1:
-        if st.button("📤 Enviar", type="primary"):
-            if user_input:
-                # Adicionar mensagem do usuário
-                st.session_state.chat_history.append({
-                    'role': 'user',
-                    'content': user_input
-                })
-                
-                # Processar resposta
-                with st.spinner("🤔 Pensando..."):
-                    result = rag_system.query_with_agent(user_input, agent_id)
-                
-                # Adicionar resposta do assistente
-                st.session_state.chat_history.append({
-                    'role': 'assistant',
-                    'content': result['answer'],
-                    'agent': result['agent_used'],
-                    'model': result['model_used']
-                })
-                
-                st.rerun()
-    
-    with col2:
-        if st.button("🗑️ Limpar Chat"):
-            st.session_state.chat_history = []
-            st.rerun()
+    # Botão adicional para limpar chat
+    if st.button("🗑️ Limpar Chat"):
+        st.session_state.chat_history = []
+        st.rerun()
 
 def agents_interface(rag_system):
     """Interface de gerenciamento de agentes"""
