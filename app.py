@@ -4,11 +4,14 @@ Interface web Streamlit para o sistema RAG
 
 import streamlit as st
 import os
+from dotenv import load_dotenv
 import tempfile
 from pathlib import Path
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
+
+load_dotenv()
 
 from llm_providers import LLMProviderManager
 from privacy_system import privacy_manager
