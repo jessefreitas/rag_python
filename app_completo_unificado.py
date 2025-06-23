@@ -715,58 +715,180 @@ def agents_interface(rag_system):
             st.info("Nenhum agente disponível para configuração.")
 
 def multi_llm_interface(rag_system):
-    """Interface de comparação Multi-LLM"""
-    st.header("🔄 Comparador Multi-LLM")
+    """Interface Multi-LLM com testes e comparações"""
+    st.header("🤖 Sistema Multi-LLM")
     
-    st.write("Compare respostas de diferentes provedores de IA lado a lado")
+    tab1, tab2, tab3 = st.tabs(["💬 Chat Individual", "⚖️ Comparação", "🧪 Testes"])
     
-    # Seleção de provedores
-    st.subheader("🎯 Selecionar Provedores para Comparação")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        use_openai = st.checkbox("🤖 OpenAI", value=True)
-    with col2:
-        use_google = st.checkbox("🧠 Google Gemini", value=True)
-    with col3:
-        use_openrouter = st.checkbox("🌐 OpenRouter", value=True)
-    with col4:
-        use_deepseek = st.checkbox("🔮 DeepSeek", value=True)
-    
-    # Pergunta para comparação
-    question = st.text_area("❓ Pergunta para Comparação:", 
-                           placeholder="Digite sua pergunta aqui...", height=100)
-    
-    if st.button("🚀 Comparar Respostas", type="primary"):
-        if question:
-            providers = []
-            if use_openai: providers.append('openai')
-            if use_google: providers.append('google')
-            if use_openrouter: providers.append('openrouter')
-            if use_deepseek: providers.append('deepseek')
+    with tab1:
+        st.subheader("💬 Chat com Provedor Específico")
+        
+        # Seleção de provedor
+        providers_available = ["openai", "google", "openrouter", "deepseek"]
+        selected_provider = st.selectbox(
+            "🔧 Escolher Provedor LLM:",
+            providers_available,
+            format_func=lambda x: {
+                "openai": "🤖 OpenAI (GPT)",
+                "google": "🔍 Google Gemini", 
+                "openrouter": "🌐 OpenRouter",
+                "deepseek": "🧠 DeepSeek"
+            }.get(x, x.upper())
+        )
+        
+        # Seleção de agente
+        agents = rag_system.agent_manager.get_all_agents()
+        agent_options = {"Sistema Padrão": None}
+        agent_options.update({f"{agent['name']} (ID: {agent['id'][:8]}...)": agent['id'] for agent in agents})
+        
+        selected_agent_option = st.selectbox(
+            "🤖 Escolher Agente:",
+            list(agent_options.keys()),
+            help="Selecione qual agente especializado usar para a conversa"
+        )
+        selected_agent_id = agent_options[selected_agent_option]
+        
+        # Mostrar info do agente selecionado
+        if selected_agent_id:
+            agent = rag_system.agent_manager.get_agent_by_id(selected_agent_id)
+            if agent:
+                st.info(f"🤖 **Agente:** {agent['name']} | **Tipo:** {agent.get('agent_type', 'N/A')} | **Modelo:** {agent.get('model', 'N/A')}")
+        else:
+            st.info(f"🤖 **Sistema Padrão** | **Provedor:** {selected_provider.upper()}")
+        
+        # Chat input
+        user_question = st.chat_input("💭 Digite sua pergunta...")
+        
+        # Inicializar histórico se não existir
+        if f"chat_history_{selected_provider}" not in st.session_state:
+            st.session_state[f"chat_history_{selected_provider}"] = []
+        
+        # Processar nova mensagem
+        if user_question:
+            # Adicionar pergunta do usuário
+            st.session_state[f"chat_history_{selected_provider}"].append({
+                'role': 'user',
+                'content': user_question
+            })
             
-            if providers:
-                with st.spinner("🔄 Processando comparação..."):
-                    results = rag_system.multi_llm_compare(question, providers)
+            # Gerar resposta
+            with st.spinner(f"🤔 {selected_provider.upper()} pensando..."):
+                if selected_agent_id:
+                    # Usar agente específico
+                    result = rag_system.query_with_agent(user_question, selected_agent_id)
+                else:
+                    # Usar provedor específico
+                    result = rag_system.llm_manager.generate_response(
+                        user_question, 
+                        provider_name=selected_provider
+                    )
                 
-                if 'error' not in results:
+                # Adicionar resposta
+                if result.get('success', False):
+                    st.session_state[f"chat_history_{selected_provider}"].append({
+                        'role': 'assistant',
+                        'content': result.get('response', result.get('answer', 'Sem resposta')),
+                        'provider': selected_provider,
+                        'agent': selected_agent_option if selected_agent_id else 'Sistema Padrão',
+                        'response_time': result.get('response_time', 0)
+                    })
+                else:
+                    st.session_state[f"chat_history_{selected_provider}"].append({
+                        'role': 'error',
+                        'content': f"Erro: {result.get('error', 'Erro desconhecido')}",
+                        'provider': selected_provider
+                    })
+        
+        # Mostrar histórico do chat
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state[f"chat_history_{selected_provider}"]:
+                if message['role'] == 'user':
+                    st.chat_message("user").write(message['content'])
+                elif message['role'] == 'assistant':
+                    with st.chat_message("assistant"):
+                        st.write(message['content'])
+                        st.caption(f"🤖 {message.get('provider', '').upper()} | ⚡ {message.get('response_time', 0):.2f}s | 👤 {message.get('agent', 'N/A')}")
+                elif message['role'] == 'error':
+                    st.error(f"❌ {message['content']}")
+        
+        # Botão para limpar chat
+        if st.button(f"🗑️ Limpar Chat {selected_provider.upper()}"):
+            st.session_state[f"chat_history_{selected_provider}"] = []
+            st.rerun()
+    
+    with tab2:
+        st.subheader("⚖️ Comparação Multi-LLM")
+        
+        # Seleção de agente para comparação
+        agents = rag_system.agent_manager.get_all_agents()
+        agent_options = {"Sistema Padrão": None}
+        agent_options.update({f"{agent['name']} (ID: {agent['id'][:8]}...)": agent['id'] for agent in agents})
+        
+        comparison_agent_option = st.selectbox(
+            "🤖 Agente para Comparação:",
+            list(agent_options.keys()),
+            help="Todos os provedores usarão este agente/sistema para responder",
+            key="comparison_agent"
+        )
+        comparison_agent_id = agent_options[comparison_agent_option]
+        
+        # Seleção de provedores para comparação
+        providers_available = ["openai", "google", "openrouter", "deepseek"]
+        selected_providers = st.multiselect(
+            "🔧 Provedores para Comparação:",
+            providers_available,
+            default=["openai", "google"],
+            format_func=lambda x: {
+                "openai": "🤖 OpenAI (GPT)",
+                "google": "🔍 Google Gemini", 
+                "openrouter": "🌐 OpenRouter",
+                "deepseek": "🧠 DeepSeek"
+            }.get(x, x.upper())
+        )
+        
+        comparison_question = st.text_area("❓ Pergunta para Comparação:", 
+                                         placeholder="Digite uma pergunta para comparar entre os provedores...")
+        
+        if st.button("⚖️ Comparar Provedores", type="primary"):
+            if comparison_question and selected_providers:
+                with st.spinner("🔄 Comparando provedores..."):
+                    if comparison_agent_id:
+                        # Usar agente específico
+                        results = {}
+                        for provider in selected_providers:
+                            try:
+                                result = rag_system.query_with_agent(comparison_question, comparison_agent_id)
+                                results[provider] = {
+                                    'success': result.get('success', False),
+                                    'response': result.get('answer', 'Sem resposta'),
+                                    'response_time': result.get('response_time', 0),
+                                    'error': result.get('error', None)
+                                }
+                            except Exception as e:
+                                results[provider] = {
+                                    'success': False,
+                                    'response': '',
+                                    'response_time': 0,
+                                    'error': str(e)
+                                }
+                    else:
+                        # Usar sistema multi-LLM
+                        results = rag_system.multi_llm_compare(comparison_question, selected_providers)
+                
+                if isinstance(results, dict) and 'error' not in results:
+                    # Mostrar resultados
                     st.subheader("📊 Resultados da Comparação")
                     
-                    # Criar colunas para cada provedor
-                    cols = st.columns(len(providers))
-                    
-                    for i, provider in enumerate(providers):
-                        with cols[i]:
-                            if provider in results:
-                                result = results[provider]
-                                
-                                # Card do provedor
+                    for provider in selected_providers:
+                        if provider in results:
+                            result = results[provider]
+                            
+                            with st.expander(f"🤖 {provider.upper()} - {'✅ Sucesso' if result.get('success') else '❌ Erro'}"):
                                 st.markdown(f"""
-                                <div class="provider-card">
-                                    <h4>{provider.upper()}</h4>
-                                    <p>⏱️ Tempo: {result.get('response_time', 'N/A')}s</p>
-                                    <p>🎯 Status: {'✅' if result.get('success') else '❌'}</p>
+                                <div class="provider-result">
+                                    <p><strong>⏱️ Tempo:</strong> {result.get('response_time', 0):.2f}s</p>
+                                    <p><strong>🤖 Agente:</strong> {comparison_agent_option}</p>
                                 </div>
                                 """, unsafe_allow_html=True)
                                 
@@ -784,30 +906,69 @@ def multi_llm_interface(rag_system):
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
-                        times = [results[p].get('response_time', 0) for p in providers if p in results]
+                        # Corrigir o erro IndexError
+                        valid_results = {p: r for p, r in results.items() if isinstance(r, dict) and r.get('success')}
+                        times = [r.get('response_time', 0) for r in valid_results.values()]
+                        
                         if times:
-                            fastest = min(times)
-                            fastest_providers = [p for p in providers if p in results and results[p].get('response_time') == fastest]
+                            fastest_time = min(times)
+                            fastest_providers = [p for p, r in valid_results.items() if r.get('response_time') == fastest_time]
                             if fastest_providers:
                                 fastest_provider = fastest_providers[0]
-                                st.metric("⚡ Mais Rápido", fastest_provider.upper(), f"{fastest:.2f}s")
+                                st.metric("⚡ Mais Rápido", fastest_provider.upper(), f"{fastest_time:.2f}s")
                             else:
                                 st.metric("⚡ Mais Rápido", "N/A", "0.00s")
+                        else:
+                            st.metric("⚡ Mais Rápido", "N/A", "0.00s")
                     
                     with col2:
-                        successful = sum(1 for p in providers if p in results and results[p].get('success'))
-                        st.metric("✅ Sucessos", f"{successful}/{len(providers)}")
+                        successful = len(valid_results)
+                        st.metric("✅ Sucessos", f"{successful}/{len(selected_providers)}")
                     
                     with col3:
                         avg_time = sum(times) / len(times) if times else 0
                         st.metric("⏱️ Tempo Médio", f"{avg_time:.2f}s")
                 
                 else:
-                    st.error(f"Erro na comparação: {results['error']}")
+                    st.error(f"Erro na comparação: {results.get('error', 'Erro desconhecido')}")
             else:
-                st.warning("⚠️ Selecione pelo menos um provedor para comparação.")
-        else:
-            st.warning("⚠️ Digite uma pergunta para comparação.")
+                if not comparison_question:
+                    st.warning("⚠️ Digite uma pergunta para comparação.")
+                if not selected_providers:
+                    st.warning("⚠️ Selecione pelo menos um provedor para comparação.")
+    
+    with tab3:
+        st.subheader("🧪 Testes de Conectividade")
+        
+        st.info("🔧 Teste a conectividade e configuração de cada provedor LLM")
+        
+        providers_available = ["openai", "google", "openrouter", "deepseek"]
+        
+        for provider in providers_available:
+            with st.expander(f"🧪 Testar {provider.upper()}"):
+                test_question = st.text_input(f"Pergunta de teste para {provider}:", 
+                                            value="Olá, você está funcionando?",
+                                            key=f"test_{provider}")
+                
+                if st.button(f"🧪 Testar {provider.upper()}", key=f"btn_test_{provider}"):
+                    with st.spinner(f"🧪 Testando {provider}..."):
+                        try:
+                            result = rag_system.llm_manager.generate_response(
+                                test_question, 
+                                provider_name=provider
+                            )
+                            
+                            if result.get('success', False):
+                                st.success(f"✅ {provider.upper()} funcionando!")
+                                st.info(f"⏱️ Tempo de resposta: {result.get('response_time', 0):.2f}s")
+                                st.text_area(f"Resposta de {provider}:", 
+                                           value=result.get('response', 'Sem resposta'),
+                                           height=100, key=f"test_response_{provider}")
+                            else:
+                                st.error(f"❌ Erro no {provider.upper()}: {result.get('error', 'Erro desconhecido')}")
+                        
+                        except Exception as e:
+                            st.error(f"❌ Exceção no {provider.upper()}: {str(e)}")
 
 def privacy_interface(rag_system):
     """Interface de privacidade LGPD"""

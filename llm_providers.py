@@ -283,8 +283,52 @@ class LLMProviderManager:
             return self.providers[self.active_provider]
         return None
     
-    def generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """Gera resposta usando o provedor ativo"""
+    def generate_response(self, messages: List[Dict[str, str]], provider_name: str = None, **kwargs) -> Dict[str, Any]:
+        """Gera resposta usando o provedor especificado ou ativo"""
+        try:
+            # Usar provedor específico ou ativo
+            if provider_name and provider_name in self.providers:
+                provider = self.providers[provider_name]
+            else:
+                provider = self.get_active_provider()
+                if not provider:
+                    return {
+                        'success': False,
+                        'error': 'Nenhum provedor de IA configurado',
+                        'response': '',
+                        'response_time': 0
+                    }
+            
+            # Converter mensagem simples em formato de lista se necessário
+            if isinstance(messages, str):
+                messages = [{"role": "user", "content": messages}]
+            
+            start_time = __import__('time').time()
+            
+            # Gerar resposta
+            response = provider.generate_response(messages, **kwargs)
+            
+            end_time = __import__('time').time()
+            
+            return {
+                'success': True,
+                'response': response,
+                'response_time': round(end_time - start_time, 2),
+                'provider': provider_name or self.active_provider,
+                'model': provider.config.model_name
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar resposta: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'response': '',
+                'response_time': 0
+            }
+    
+    def generate_response_old(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Gera resposta usando o provedor ativo (método legado)"""
         provider = self.get_active_provider()
         if not provider:
             raise ValueError("Nenhum provedor de IA configurado")
@@ -313,8 +357,8 @@ class LLMProviderManager:
             info["providers"][name] = {
                 "name": provider.config.name,
                 "model_name": provider.config.model_name,
-                "temperature": provider.config.temperature,
-                "max_tokens": provider.config.max_tokens
+                "temperature": float(provider.config.temperature),
+                "max_tokens": int(provider.config.max_tokens)
             }
         
         return info
@@ -342,8 +386,8 @@ class LLMProviderManager:
                         "duration": round(end_time - start_time, 2),
                         "model": self.providers[provider_name].config.model_name,
                         "provider_info": {
-                            "temperature": self.providers[provider_name].config.temperature,
-                            "max_tokens": self.providers[provider_name].config.max_tokens
+                            "temperature": float(self.providers[provider_name].config.temperature),
+                            "max_tokens": int(self.providers[provider_name].config.max_tokens)
                         }
                     }
                 except Exception as e:
