@@ -465,19 +465,19 @@ def dashboard_interface(rag_system):
     
     with col1:
         if st.button("🔧 Configurar APIs", help="Ir para configurações de API"):
-            st.switch_page("⚙️ Configurações")
+            st.info("💡 Use a aba **⚙️ Configurações** acima para configurar APIs")
     
     with col2:
         if st.button("🤖 Criar Agente", help="Criar novo agente"):
-            st.switch_page("🤖 Agentes")
+            st.info("💡 Use a aba **🤖 Agentes** acima para criar agentes")
     
     with col3:
         if st.button("📤 Upload Docs", help="Fazer upload de documentos"):
-            st.switch_page("📁 Documentos")
+            st.info("💡 Use a aba **📁 Documentos** acima para upload")
     
     with col4:
         if st.button("🧪 Testar LLMs", help="Testar conectividade"):
-            st.switch_page("⚙️ Configurações")
+            st.info("💡 Use a aba **⚙️ Configurações** > **🧪 Testes** para testar LLMs")
     
     # Informações do sistema
     st.markdown("---")
@@ -770,8 +770,12 @@ def multi_llm_interface(rag_system):
                         times = [results[p].get('response_time', 0) for p in providers if p in results]
                         if times:
                             fastest = min(times)
-                            fastest_provider = [p for p in providers if p in results and results[p].get('response_time') == fastest][0]
-                            st.metric("⚡ Mais Rápido", fastest_provider.upper(), f"{fastest:.2f}s")
+                            fastest_providers = [p for p in providers if p in results and results[p].get('response_time') == fastest]
+                            if fastest_providers:
+                                fastest_provider = fastest_providers[0]
+                                st.metric("⚡ Mais Rápido", fastest_provider.upper(), f"{fastest:.2f}s")
+                            else:
+                                st.metric("⚡ Mais Rápido", "N/A", "0.00s")
                     
                     with col2:
                         successful = sum(1 for p in providers if p in results and results[p].get('success'))
